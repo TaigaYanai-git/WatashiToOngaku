@@ -108,3 +108,35 @@ extension Date {
             .year().month().day().weekday(.abbreviated))
     }
 }
+
+/// 連桁でつながった2つの八分音符（♫）。SF Symbols に単独の記号がないので描く
+struct BeamedEighthNotesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, h = rect.height
+        let headW = w * 0.40, headH = h * 0.24
+        let stemW = w * 0.075
+        let beamH = h * 0.14
+        // 右の音符を少し高くして、連桁を右上がりにする
+        let leftHead = CGRect(x: rect.minX, y: rect.maxY - headH, width: headW, height: headH)
+        let rightHead = CGRect(x: rect.maxX - headW, y: rect.maxY - headH - h * 0.10, width: headW, height: headH)
+        let leftStemX = leftHead.maxX - stemW, rightStemX = rightHead.maxX - stemW
+        let leftTop = rect.minY + h * 0.10, rightTop = rect.minY
+
+        var path = Path()
+        for head in [leftHead, rightHead] {
+            path.addPath(Path(ellipseIn: head)
+                .applying(CGAffineTransform(translationX: -head.midX, y: -head.midY)
+                    .concatenating(CGAffineTransform(rotationAngle: -.pi / 9))
+                    .concatenating(CGAffineTransform(translationX: head.midX, y: head.midY))))
+        }
+        path.addRect(CGRect(x: leftStemX, y: leftTop, width: stemW, height: leftHead.midY - leftTop))
+        path.addRect(CGRect(x: rightStemX, y: rightTop, width: stemW, height: rightHead.midY - rightTop))
+        // 連桁：2本の符幹の上端をつなぐ平行四辺形
+        path.move(to: CGPoint(x: leftStemX, y: leftTop))
+        path.addLine(to: CGPoint(x: rightStemX + stemW, y: rightTop))
+        path.addLine(to: CGPoint(x: rightStemX + stemW, y: rightTop + beamH))
+        path.addLine(to: CGPoint(x: leftStemX, y: leftTop + beamH))
+        path.closeSubpath()
+        return path
+    }
+}

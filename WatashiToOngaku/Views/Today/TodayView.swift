@@ -174,9 +174,10 @@ struct TodayView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.dlPrimaryBg)
                     .frame(width: 200, height: 200)
-                Image(systemName: "music.note")
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(LinearGradient.dlPrimary)
+                BeamedEighthNotesShape()
+                    .fill(LinearGradient.dlPrimary)
+                    .frame(width: 84, height: 80)
+                    .accessibilityHidden(true)
             }
             Text(verbatim: isToday ? S("今日の一曲はまだ選ばれていません", "No song for today yet")
                                    : S("この日の曲は記録されていません", "No song recorded for this day"))

@@ -17,7 +17,9 @@ enum SampleData {
             ("Starlight Avenue", "Hana & Leo", ""),
         ]
         let calendar = Calendar.current
-        for offset in 0..<40 where offset % 9 != 5 {
+        // -emptyToday のときは今日を空にする（未選択の画面の確認用）
+        let first = ProcessInfo.processInfo.arguments.contains("-emptyToday") ? 1 : 0
+        for offset in first..<40 where offset % 9 != 5 {
             let day = calendar.date(byAdding: .day, value: -offset, to: Date())!
             let pick = songs[(offset * 3) % songs.count]
             let index = (offset * 3) % songs.count
