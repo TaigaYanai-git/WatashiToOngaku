@@ -1,0 +1,95 @@
+// 私と音楽の CloudKit スキーマ（公開データベース）。開発環境はこの内容に合わせてある。
+// 方針：どのフィールドにも検索用の索引（QUERYABLE / SEARCHABLE / SORTABLE）を付けない。
+//   開発環境ではアプリが新しいフィールドを保存すると CloudKit が自動で索引を付けるので、
+//   フィールドを増やすときは先にコンソールで（索引なしで）追加してから使うこと。
+//   本番へは「Deploy Schema Changes…」で反映する。反映前に Indexes が空であることを確認する。
+DEFINE SCHEMA
+
+    // 利用者（CloudKit が自動で作る型）
+    RECORD TYPE Users (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        roles           LIST<INT64>,
+        GRANT WRITE TO "_creator",
+        GRANT READ TO "_world"
+    );
+
+    // フレンドコード（レコード名 = コード）→ 鍵・ニックネーム・アイコン。
+    // 検索用の索引は付けない（付けると他人の鍵を探し出せてしまう）。
+    RECORD TYPE FriendCode (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        avatar          ASSET,
+        avatarVersion   INT64,
+        nickname        STRING,
+        secret          STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // 投稿（レコード名 = "s-<鍵>-<日付>"）。索引なし：鍵を知っている人だけがレコード名で読める
+    RECORD TYPE Post (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        albumTitle      STRING,
+        appleMusicURL   STRING,
+        artist          STRING,
+        artworkURL      STRING,
+        dayKey          STRING,
+        memo            STRING,
+        postedAt        TIMESTAMP,
+        previewURL      STRING,
+        songID          STRING,
+        title           STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // フレンド申請の郵便受け（レコード名 = "r-<宛先コード>-<枠>"）。索引なし
+    RECORD TYPE FriendRequest (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        fromCode        STRING,
+        previousCode    STRING,
+        sentAt          TIMESTAMP,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // 通報。開発者が CloudKit コンソールで確認する。ほかの利用者には見せない
+    RECORD TYPE Report (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        dayKey          STRING,
+        memo            STRING,
+        reason          STRING,
+        reportedCode    STRING,
+        reporterCode    STRING,
+        title           STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_creator"
+    );
