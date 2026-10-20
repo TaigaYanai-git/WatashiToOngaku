@@ -1,0 +1,11 @@
+// 全員共通の設定（Git 管理）。
+// 自分だけの値（Team ID や Bundle ID）は Config/Local.xcconfig に書く（Git 管理外）。
+// xcconfig では "//" がコメント扱いになるので、URL は https:/$()/... と書く。
+
+BUNDLE_ID_PREFIX = com.example
+DEVELOPMENT_TEAM =
+
+REPO_URL = https:/$()/github.com/TaigaYanai-git/WatashiToOngaku
+PRIVACY_POLICY_URL = https:/$()/taigayanai-git.github.io/WatashiToOngaku/privacy.html
+
+#include? "Local.xcconfig"

@@ -1,0 +1,3 @@
+// Config/Local.xcconfig にコピーして自分の値を書く（Git 管理外）
+BUNDLE_ID_PREFIX = com.example
+DEVELOPMENT_TEAM = XXXXXXXXXX
