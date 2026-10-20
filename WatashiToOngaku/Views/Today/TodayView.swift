@@ -101,7 +101,7 @@ struct TodayView: View {
     private func songCard(_ entry: SongEntry) -> some View {
         VStack(spacing: 16) {
             PlayableArtwork(id: entry.songID, artworkURL: entry.artworkURL, previewURL: entry.previewURL,
-                            size: nil, cornerRadius: 16)
+                            size: 250, cornerRadius: 20)
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
             VStack(spacing: 4) {
                 Text(entry.title)
@@ -151,7 +151,7 @@ struct TodayView: View {
             .font(.subheadline)
         }
         .frame(maxWidth: .infinity)
-        .dlCard(padding: 14)
+        .dlCard(padding: 20)
     }
 
     private func memoCard(_ entry: SongEntry) -> some View {
