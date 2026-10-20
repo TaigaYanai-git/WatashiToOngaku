@@ -45,7 +45,7 @@ private struct AppRootView: View {
             }
         )) {
             TodayView()
-                .tabItem { Label(S("今日", "Today"), systemImage: "music.note") }
+                .tabItem { Label { Text(S("今日", "Today")) } icon: { Image("TodayTabIcon") } }
                 .tag(AppTab.today)
             SongCalendarView()
                 .tabItem { Label(S("カレンダー", "Calendar"), systemImage: "calendar") }

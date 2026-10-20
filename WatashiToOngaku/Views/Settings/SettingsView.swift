@@ -201,6 +201,13 @@ struct SettingsView: View {
                     row(icon: "chevron.left.forwardslash.chevron.right", title: S("ソースコード", "Source Code"), detail: "") { openURL(url) }
                 }
             }
+            Link(destination: URL(string: "https://www.flaticon.com/free-icon/music_10848925")!) {
+                Text(verbatim: "Music icon by dickprayuda – Flaticon")
+                    .font(.caption)
+                    .foregroundColor(.dlTextSub)
+                    .underline()
+            }
+            .padding(.horizontal, 20)
             Text(verbatim: S("曲の検索と試聴には Apple Music を使います。選んだ曲・メモはこの iPhone の中だけに保存されます。",
                              "Songs are searched and previewed with Apple Music. Your songs and notes stay on this iPhone."))
                 .font(.caption)

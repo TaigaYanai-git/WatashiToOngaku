@@ -174,9 +174,13 @@ struct TodayView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.dlPrimaryBg)
                     .frame(width: 200, height: 200)
-                BeamedEighthNotesShape()
-                    .fill(LinearGradient.dlPrimary)
-                    .frame(width: 84, height: 80)
+                // アイコン：Music by dickprayuda（Flaticon）。クレジットは設定画面に表記
+                Image("TodaySongIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .foregroundStyle(LinearGradient.dlPrimary)
+                    .frame(width: 110, height: 110)
                     .accessibilityHidden(true)
             }
             Text(verbatim: isToday ? S("今日の一曲はまだ選ばれていません", "No song for today yet")

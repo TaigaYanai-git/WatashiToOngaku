@@ -25,3 +25,7 @@ open WatashiToOngaku.xcodeproj
 | `scripts/screenshots.sh` | サンプルデータで起動して App Store 用スクリーンショットを撮る |
 | `swift tools/make_icon.swift <V-Diaryのappiconset> <出力>` | V-Diary のアイコンに音符を重ねてアイコンを作る |
 | 起動引数 `-uiPreview -initialTab calendar` | メモリ上のサンプルデータで起動 |
+
+## クレジット
+
+- 「今日」のアイコン: [Music icon by dickprayuda – Flaticon](https://www.flaticon.com/free-icon/music_10848925)（Flaticon License、要クレジット表記）
