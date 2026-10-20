@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
+    @AppStorage(AppIconManager.followsThemeKey) private var iconFollowsTheme = false
 
     var body: some View {
         NavigationStack {
@@ -124,6 +125,34 @@ struct SettingsView: View {
             .cornerRadius(16)
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+
+            // アプリアイコンもテーマカラーに合わせる
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.dlPrimaryBg).frame(width: 36, height: 36)
+                    Image(systemName: "app.badge").font(.body).foregroundColor(.dlPrimary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
+                        .font(.subheadline)
+                        .foregroundColor(.dlText)
+                    Text(verbatim: S("切り替えるたびに iOS のお知らせが出ます", "iOS shows a notice each time it changes"))
+                        .font(.caption2)
+                        .foregroundColor(.dlTextSub)
+                }
+                Spacer()
+                Toggle("", isOn: $iconFollowsTheme)
+                    .tint(.dlPrimary)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.dlCard)
+            .cornerRadius(16)
+            .padding(.horizontal, 20)
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+            .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply(accentIndex: theme.accentIndex) }
+            .onChange(of: theme.accentIndex) { _, index in AppIconManager.apply(accentIndex: index) }
         }
     }
 
