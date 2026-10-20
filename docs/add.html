@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>私と音楽 フレンド招待</title>
+<style>
+  :root { --fg:#2e2540; --bg:#f7f4fc; --card:#fff; --accent:#38383f; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ece6f7; --bg:#1c1724; --card:#26213a; --accent:#c8c4d4; } }
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; color:var(--fg); background:var(--bg);
+         margin:0; padding:48px 16px; text-align:center; line-height:1.7; }
+  .card { max-width:420px; margin:0 auto; background:var(--card); border-radius:24px; padding:32px 20px; }
+  img { width:88px; border-radius:20px; }
+  .code { font: 700 1.6rem ui-monospace, Menlo, monospace; letter-spacing:.12em; margin:8px 0 20px; }
+  a.btn { display:block; padding:16px; border-radius:18px; background:var(--accent); color:var(--bg);
+          text-decoration:none; font-weight:700; margin:12px 0; }
+  small { opacity:.7; }
+</style>
+</head>
+<body>
+<div class="card">
+  <img src="icon.png" alt="">
+  <h1 style="font-size:1.3rem">私と音楽でフレンドになろう</h1>
+  <p>フレンドコード</p>
+  <div class="code" id="code">--------</div>
+  <a class="btn" id="open" href="#">アプリで開いてフレンドになる</a>
+  <p><small>アプリを入れていない場合は、App Store から「私と音楽」を入れてから、もう一度このページを開いてください。<br>アプリの「タイムライン」→ 右上のアイコン →「フレンドを追加」にコードを入力しても追加できます。</small></p>
+</div>
+<script>
+  // コードは英数字8文字だけを受け付ける
+  const c = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  document.getElementById('code').textContent = c || '--------';
+  const app = 'watashitoongaku://add?c=' + encodeURIComponent(c);
+  document.getElementById('open').href = app;
+  if (c.length === 8) setTimeout(() => { location.href = app; }, 300);
+</script>
+</body>
+</html>

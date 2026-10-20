@@ -1,4 +1,5 @@
 import CoreImage.CIFilterBuiltins
+import PhotosUI
 import SwiftUI
 import VisionKit
 
@@ -11,6 +12,9 @@ struct FriendsView: View {
     @State private var showMyQR = false
     @State private var message: String?
     @State private var removing: Friend?
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var editingName = false
+    @State private var nameDraft = ""
 
     var body: some View {
         NavigationStack {
@@ -34,7 +38,7 @@ struct FriendsView: View {
             .sheet(isPresented: $showScanner) {
                 QRScannerSheet { url in
                     showScanner = false
-                    Task { await add { await social.addFriend(shareURL: url) } }
+                    Task { await add { await social.addFriend(url: url) } }
                 }
             }
             .sheet(isPresented: $showMyQR) { MyQRSheet() }
@@ -55,6 +59,38 @@ struct FriendsView: View {
 
     private var myCard: some View {
         VStack(spacing: 12) {
+            // アイコン（タップで写真を選ぶ）とニックネーム
+            PhotosPicker(selection: $avatarItem, matching: .images) {
+                AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 76)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "camera.circle.fill")
+                            .font(.system(size: 24))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.dlPrimary)
+                    }
+            }
+            .accessibilityLabel(S("アイコンを変える", "Change Icon"))
+            .onChange(of: avatarItem) { _, item in
+                Task {
+                    guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
+                    if !(await social.setAvatar(data)) { message = social.lastError ?? S("アイコンを変えられませんでした", "Couldn't change icon") }
+                }
+            }
+            Button {
+                nameDraft = social.nickname
+                editingName = true
+            } label: {
+                HStack(spacing: 4) {
+                    Text(social.nickname).font(.headline).foregroundColor(.dlText)
+                    Image(systemName: "pencil").font(.caption).foregroundColor(.dlTextSub)
+                }
+            }
+            .alert(Text(verbatim: S("ニックネーム", "Nickname")), isPresented: $editingName) {
+                TextField("", text: $nameDraft)
+                Button(S("保存", "Save")) { Task { await social.rename(nameDraft) } }
+                Button(S("キャンセル", "Cancel"), role: .cancel) {}
+            }
+            Divider()
             Text(verbatim: S("あなたのフレンドコード", "Your Friend Code"))
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.dlTextSub)
@@ -63,7 +99,7 @@ struct FriendsView: View {
                 .foregroundColor(.dlText)
                 .textSelection(.enabled)
             HStack(spacing: 10) {
-                if let url = social.shareURL {
+                if let url = social.inviteURL {
                     ShareLink(item: url,
                               subject: Text(verbatim: S("私と音楽", "Me & Music")),
                               message: Text(verbatim: S("「私と音楽」でフレンドになろう！フレンドコード：\(social.friendCode)",
@@ -124,10 +160,7 @@ struct FriendsView: View {
             }
             ForEach(social.friends) { friend in
                 HStack(spacing: 12) {
-                    Text(String(friend.nickname.prefix(1)))
-                        .font(.headline).foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(LinearGradient.dlPrimary).clipShape(Circle())
+                    AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname)
                     Text(friend.nickname).font(.subheadline).foregroundColor(.dlText)
                     Spacer()
                     Button { removing = friend } label: {
@@ -159,7 +192,7 @@ private struct MyQRSheet: View {
         VStack(spacing: 18) {
             Text(verbatim: S("このQRコードを読み取ってもらうと、フレンドになれます", "Have a friend scan this code"))
                 .font(.subheadline).foregroundColor(.dlTextSub).multilineTextAlignment(.center)
-            if let url = social.shareURL, let image = Self.qrImage(url.absoluteString) {
+            if let url = social.inviteURL, let image = Self.qrImage(url.absoluteString) {
                 Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
                     .frame(width: 240, height: 240)
                     .padding(16).background(Color.white).cornerRadius(20)
@@ -230,7 +263,7 @@ private struct QRScannerRepresentable: UIViewControllerRepresentable {
         func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
             for case let .barcode(code) in items {
                 guard !done, let text = code.payloadStringValue, let url = URL(string: text),
-                      url.scheme == "https" else { continue }
+                      SocialStore.code(in: url) != nil else { continue }
                 done = true
                 scanner.stopScanning()
                 onFound(url)

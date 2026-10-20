@@ -76,8 +76,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSAppleMusicUsageDescription: 今日の一曲を選ぶために、Apple Music で曲を検索・試聴します。
         NSCameraUsageDescription: フレンドのQRコードを読み取るために使います。
-        # 招待リンク（CloudKit の共有リンク）をこのアプリで開く
-        CKSharingSupported: true
+        # 招待リンク（docs/add.html から watashitoongaku://add?c=コード で開く）
+        CFBundleURLTypes:
+          - CFBundleURLName: com.taigayanai.watashitoongaku.invite
+            CFBundleURLSchemes: [watashitoongaku]
         REPO_URL: $(REPO_URL)
         PRIVACY_POLICY_URL: $(PRIVACY_POLICY_URL)
 

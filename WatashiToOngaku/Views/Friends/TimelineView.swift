@@ -100,14 +100,10 @@ private struct PostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Text(String(post.friend.nickname.prefix(1)))
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(LinearGradient.dlPrimary)
-                    .clipShape(Circle())
+                AvatarView(code: post.friend.code, version: post.friend.avatarVersion, nickname: post.friend.nickname)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(post.friend.nickname).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                    Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)") : post.friend.nickname)
+                        .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
                 }
                 Spacer()
@@ -118,7 +114,9 @@ private struct PostCard: View {
                     if let link = post.appleMusicURL.flatMap(URL.init(string:)) {
                         Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
                     }
-                    Button(S("通報してブロック", "Report & Block"), systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
+                    if !post.friend.isMe {
+                        Button(S("通報してブロック", "Report & Block"), systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
+                    }
                 } label: {
                     Image(systemName: "ellipsis").foregroundColor(.dlTextSub).frame(width: 30, height: 30)
                 }

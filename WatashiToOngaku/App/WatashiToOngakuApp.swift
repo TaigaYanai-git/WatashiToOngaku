@@ -1,4 +1,3 @@
-import CloudKit
 import SwiftData
 import SwiftUI
 
@@ -17,29 +16,6 @@ enum AppContainer {
     }()
 }
 
-/// 招待リンク（CloudKit の共有リンク）をタップしてアプリが開いたときに受け取る
-final class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
-                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        let config = UISceneConfiguration(name: nil, sessionRole: session.role)
-        config.delegateClass = SceneDelegate.self
-        return config
-    }
-}
-
-final class SceneDelegate: NSObject, UIWindowSceneDelegate {
-    func windowScene(_ windowScene: UIWindowScene, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
-        Task { @MainActor in
-            let social = SocialStore.shared
-            if social.state != .ready { await social.start() }
-            _ = await social.accept(metadata)
-            PendingInvite.shared.result = social.lastError == nil
-                ? S("フレンドになりました！", "You're now friends!")
-                : (social.lastError ?? "")
-        }
-    }
-}
-
 /// 招待リンクを受け入れた結果をアラートで出すため
 @MainActor
 final class PendingInvite: ObservableObject {
@@ -49,8 +25,6 @@ final class PendingInvite: ObservableObject {
 
 @main
 struct WatashiToOngakuApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
     init() {
         if ProcessInfo.processInfo.arguments.contains("-uiPreview") {
             SampleData.insert(into: AppContainer.shared.mainContext)
@@ -103,6 +77,22 @@ private struct AppRootView: View {
         .environmentObject(router)
         .task {
             if !ProcessInfo.processInfo.arguments.contains("-uiPreview") { await SocialStore.shared.start() }
+        }
+        // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンドに追加する
+        .onOpenURL { url in
+            guard SocialStore.code(in: url) != nil else { return }
+            Task {
+                let social = SocialStore.shared
+                if social.state != .ready { await social.start() }
+                if social.state != .ready {
+                    router.selectedTab = .timeline
+                    invite.result = S("フレンドを追加するには、先にタイムラインでニックネームを決めてください", "Set your nickname in Timeline first, then open the invite again")
+                    return
+                }
+                invite.result = await social.addFriend(url: url)
+                    ? S("フレンドになりました！", "You're now friends!")
+                    : (social.lastError ?? S("追加できませんでした", "Couldn't add friend"))
+            }
         }
         .alert(Text(verbatim: invite.result ?? ""),
                isPresented: Binding(get: { invite.result != nil }, set: { if !$0 { invite.result = nil } })) {
