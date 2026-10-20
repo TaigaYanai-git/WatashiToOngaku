@@ -201,8 +201,8 @@ struct SettingsView: View {
                     row(icon: "chevron.left.forwardslash.chevron.right", title: S("ソースコード", "Source Code"), detail: "") { openURL(url) }
                 }
             }
-            Link(destination: URL(string: "https://www.flaticon.com/free-icon/music_10848925")!) {
-                Text(verbatim: "Music icon by dickprayuda – Flaticon")
+            Link(destination: URL(string: "https://www.flaticon.com/free-icon/vinyl_812680")!) {
+                Text(verbatim: "Vinyl icon by Those Icons – Flaticon")
                     .font(.caption)
                     .foregroundColor(.dlTextSub)
                     .underline()

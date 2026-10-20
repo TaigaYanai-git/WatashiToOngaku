@@ -28,4 +28,4 @@ open WatashiToOngaku.xcodeproj
 
 ## クレジット
 
-- 「今日」のアイコン: [Music icon by dickprayuda – Flaticon](https://www.flaticon.com/free-icon/music_10848925)（Flaticon License、要クレジット表記）
+- 「今日」のアイコン: [Vinyl icon by Those Icons – Flaticon](https://www.flaticon.com/free-icon/vinyl_812680)（Flaticon License、要クレジット表記）

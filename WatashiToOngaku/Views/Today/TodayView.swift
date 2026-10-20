@@ -174,7 +174,7 @@ struct TodayView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.dlPrimaryBg)
                     .frame(width: 200, height: 200)
-                // アイコン：Music by dickprayuda（Flaticon）。クレジットは設定画面に表記
+                // アイコン：Vinyl by Those Icons（Flaticon）。クレジットは設定画面に表記
                 Image("TodaySongIcon")
                     .resizable()
                     .renderingMode(.template)
