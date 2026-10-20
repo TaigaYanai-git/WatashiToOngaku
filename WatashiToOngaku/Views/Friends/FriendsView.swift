@@ -1,5 +1,4 @@
 import CoreImage.CIFilterBuiltins
-import PhotosUI
 import SwiftUI
 import VisionKit
 
@@ -12,9 +11,6 @@ struct FriendsView: View {
     @State private var showMyQR = false
     @State private var message: String?
     @State private var removing: Friend?
-    @State private var avatarItem: PhotosPickerItem?
-    @State private var editingName = false
-    @State private var nameDraft = ""
 
     var body: some View {
         NavigationStack {
@@ -59,37 +55,7 @@ struct FriendsView: View {
 
     private var myCard: some View {
         VStack(spacing: 12) {
-            // アイコン（タップで写真を選ぶ）とニックネーム
-            PhotosPicker(selection: $avatarItem, matching: .images) {
-                AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 76)
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "camera.circle.fill")
-                            .font(.system(size: 24))
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, Color.dlPrimary)
-                    }
-            }
-            .accessibilityLabel(S("アイコンを変える", "Change Icon"))
-            .onChange(of: avatarItem) { _, item in
-                Task {
-                    guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
-                    if !(await social.setAvatar(data)) { message = social.lastError ?? S("アイコンを変えられませんでした", "Couldn't change icon") }
-                }
-            }
-            Button {
-                nameDraft = social.nickname
-                editingName = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text(social.nickname).font(.headline).foregroundColor(.dlText)
-                    Image(systemName: "pencil").font(.caption).foregroundColor(.dlTextSub)
-                }
-            }
-            .alert(Text(verbatim: S("ニックネーム", "Nickname")), isPresented: $editingName) {
-                TextField("", text: $nameDraft)
-                Button(S("保存", "Save")) { Task { await social.rename(nameDraft) } }
-                Button(S("キャンセル", "Cancel"), role: .cancel) {}
-            }
+            ProfileHeader()
             Divider()
             Text(verbatim: S("あなたのフレンドコード", "Your Friend Code"))
                 .font(.caption.weight(.semibold))

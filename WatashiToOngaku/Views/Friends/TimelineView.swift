@@ -6,6 +6,7 @@ struct TimelineView: View {
     @ObservedObject private var social = SocialStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
+    @State private var showProfile = false
     @State private var reporting: FriendPost?
 
     var body: some View {
@@ -26,6 +27,12 @@ struct TimelineView: View {
             .appNavBarBackground()
             .toolbar {
                 if social.state == .ready {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button { showProfile = true } label: {
+                            AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 30)
+                        }
+                        .accessibilityLabel(S("プロフィール", "Profile"))
+                    }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button { showFriends = true } label: {
                             Image(systemName: "person.2.badge.plus")
@@ -36,6 +43,19 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
+            .sheet(isPresented: $showProfile) {
+                VStack(spacing: 20) {
+                    Text(verbatim: S("プロフィール", "Profile")).font(.headline).foregroundColor(.dlText)
+                    ProfileHeader(size: 110)
+                    Button(S("閉じる", "Close")) { showProfile = false }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .padding(.horizontal, 60)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(DlBackground().ignoresSafeArea())
+                .presentationDetents([.medium])
+            }
             .confirmationDialog(S("この投稿を通報しますか？", "Report this post?"),
                                 isPresented: Binding(get: { reporting != nil }, set: { if !$0 { reporting = nil } }),
                                 titleVisibility: .visible, presenting: reporting) { post in

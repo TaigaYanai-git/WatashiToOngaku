@@ -4,6 +4,8 @@ import UserNotifications
 /// 設定（テーマ・言語・リマインダー）。V-Diary のプロフィール画面の設定部分を元にしたもの。
 struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var router: NavigationRouter
+    @ObservedObject private var social = SocialStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
@@ -13,6 +15,7 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    profileSection
                     themeSection
                     languageSection
                     settingsSection
@@ -204,6 +207,35 @@ struct SettingsView: View {
                 Text("English").tag("en")
             }
             .pickerStyle(.segmented)
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - プロフィール
+
+    private var profileSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionTitle(S("プロフィール", "Profile"))
+            Group {
+                if social.state == .ready {
+                    ProfileHeader()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    VStack(spacing: 10) {
+                        Text(verbatim: S("フレンド機能をはじめると、アイコンとニックネームを設定できます",
+                                         "Start Friends to set your icon and nickname"))
+                            .font(.subheadline)
+                            .foregroundColor(.dlTextSub)
+                            .multilineTextAlignment(.center)
+                        Button(S("タイムラインではじめる", "Start in Timeline")) { router.selectedTab = .timeline }
+                            .buttonStyle(SecondaryButtonStyle())
+                    }
+                }
+            }
+            .padding(16)
+            .background(Color.dlCard)
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .padding(.horizontal, 20)
         }
     }
