@@ -23,7 +23,7 @@ open WatashiToOngaku.xcodeproj
 | コマンド | 内容 |
 |---|---|
 | `scripts/screenshots.sh` | サンプルデータで起動して App Store 用スクリーンショットを撮る |
-| `swift tools/make_icon.swift <出力appiconset>` | 自前で描いたレコードのアイコンを作る（外部素材は使わない） |
+| `WatashiToOngaku/AppIcon.icon` | アプリアイコン（Icon Composer で開いて編集。レコードの盤とラベルの2層、どちらもガラス効果あり。外部素材は使わない） |
 | 起動引数 `-uiPreview -initialTab calendar` | メモリ上のサンプルデータで起動 |
 
 ## クレジット
