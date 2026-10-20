@@ -73,21 +73,25 @@ struct PlayableArtwork: View {
     let id: String
     let artworkURL: String
     let previewURL: String?
-    var size: CGFloat
+    /// nil なら横幅いっぱいの正方形
+    var size: CGFloat?
     var cornerRadius: CGFloat = 16
     @ObservedObject private var player = PreviewPlayer.shared
 
     var body: some View {
         let playing = player.playingID == id
+        let buttonSize = size.map { max(22, $0 * 0.16) } ?? 48
         ArtworkView(url: artworkURL, cornerRadius: cornerRadius)
             .frame(width: size, height: size)
+            .frame(maxWidth: size == nil ? .infinity : nil)
+            .aspectRatio(1, contentMode: .fit)
             .overlay(alignment: .bottomTrailing) {
                 if previewURL != nil {
                     Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
-                        .font(.system(size: max(22, size * 0.16)))
+                        .font(.system(size: buttonSize))
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, Color.black.opacity(0.45))
-                        .padding(size * 0.05)
+                        .padding(buttonSize * 0.3)
                 }
             }
             .contentShape(Rectangle())

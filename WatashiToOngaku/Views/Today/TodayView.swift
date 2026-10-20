@@ -101,7 +101,7 @@ struct TodayView: View {
     private func songCard(_ entry: SongEntry) -> some View {
         VStack(spacing: 16) {
             PlayableArtwork(id: entry.songID, artworkURL: entry.artworkURL, previewURL: entry.previewURL,
-                            size: 250, cornerRadius: 20)
+                            size: nil, cornerRadius: 16)
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
             VStack(spacing: 4) {
                 Text(entry.title)
@@ -118,25 +118,40 @@ struct TodayView: View {
                 }
             }
             HStack(spacing: 10) {
-                Button {
-                    showPicker = true
-                } label: {
-                    Label(S("曲を変える", "Change"), systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(SecondaryButtonStyle())
                 if let link = entry.appleMusicURL.flatMap(URL.init(string:)) {
                     Button {
                         openURL(link)
                     } label: {
-                        Label(S("Apple Musicで聴く", "Open in Music"), systemImage: "music.note")
+                        Label(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note")
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     .buttonStyle(SecondaryButtonStyle())
+                } else {
+                    Button { showPicker = true } label: {
+                        Label(S("曲を変える", "Change Song"), systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+                // 曲を変えるのはたまにしか使わないので、アイコンだけの小さいボタンにする
+                if entry.appleMusicURL != nil {
+                Button {
+                    showPicker = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.headline)
+                        .foregroundColor(.dlPrimary)
+                        .frame(width: 52, height: 52)
+                        .background(Color.dlPrimaryBg)
+                        .cornerRadius(18)
+                }
+                .accessibilityLabel(S("曲を変える", "Change Song"))
                 }
             }
             .font(.subheadline)
         }
         .frame(maxWidth: .infinity)
-        .dlCard(padding: 20)
+        .dlCard(padding: 14)
     }
 
     private func memoCard(_ entry: SongEntry) -> some View {

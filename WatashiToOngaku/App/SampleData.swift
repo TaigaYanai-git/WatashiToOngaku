@@ -23,7 +23,7 @@ enum SampleData {
             let index = (offset * 3) % songs.count
             let entry = SongEntry(dayKey: DayKey.string(from: day), song: PickedSong(
                 id: "sample-\(offset)", title: pick.0, artist: pick.1, albumTitle: "Sample Album",
-                artworkURL: "sample:\(index)", previewURL: nil, appleMusicURL: nil))
+                artworkURL: "sample:\(index)", previewURL: nil, appleMusicURL: "https://music.apple.com/jp/"))
             entry.memo = offset == 0 ? "今日は朝から気分がよかったので、明るい曲にした。" : pick.2
             context.insert(entry)
         }
