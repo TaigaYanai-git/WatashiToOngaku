@@ -19,6 +19,10 @@ final class SongEntry {
     var appleMusicURL: String?
     /// ひとことメモ
     var memo: String = ""
+    /// フレンドに共有する（日ごとに選べる）
+    var shareSong: Bool = true
+    /// メモもフレンドに見せる
+    var shareMemo: Bool = true
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 

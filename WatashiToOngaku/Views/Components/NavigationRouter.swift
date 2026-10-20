@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-enum AppTab: Hashable { case today, calendar, review, settings }
+enum AppTab: Hashable { case today, timeline, calendar, review, settings }
 
 /// タブの切り替えと、今日の画面で表示する日付
 final class NavigationRouter: ObservableObject {

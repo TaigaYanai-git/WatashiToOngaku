@@ -62,6 +62,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: WatashiToOngaku/WatashiToOngaku.entitlements
     info:
       path: WatashiToOngaku/Info.plist
       properties:
@@ -74,6 +75,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
         NSAppleMusicUsageDescription: 今日の一曲を選ぶために、Apple Music で曲を検索・試聴します。
+        NSCameraUsageDescription: フレンドのQRコードを読み取るために使います。
+        # 招待リンク（CloudKit の共有リンク）をこのアプリで開く
+        CKSharingSupported: true
         REPO_URL: $(REPO_URL)
         PRIVACY_POLICY_URL: $(PRIVACY_POLICY_URL)
 

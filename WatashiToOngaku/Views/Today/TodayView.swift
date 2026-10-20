@@ -8,6 +8,7 @@ struct TodayView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.openURL) private var openURL
     @Query private var entries: [SongEntry]
+    @ObservedObject private var social = SocialStore.shared
 
     @State private var showPicker = false
     @State private var memoDraft = ""
@@ -28,6 +29,7 @@ struct TodayView: View {
                     if let entry {
                         songCard(entry)
                         memoCard(entry)
+                        if social.state == .ready { shareCard(entry) }
                     } else {
                         emptyCard
                     }
@@ -168,6 +170,25 @@ struct TodayView: View {
         .dlCard()
     }
 
+    /// この日の曲をフレンドに見せるか（日ごとに選べる）
+    private func shareCard(_ entry: SongEntry) -> some View {
+        VStack(spacing: 4) {
+            Toggle(isOn: Binding(get: { entry.shareSong }, set: { entry.shareSong = $0; changed(entry) })) {
+                Label(S("フレンドに共有", "Share with Friends"), systemImage: "person.2")
+            }
+            if entry.shareSong {
+                Divider()
+                Toggle(isOn: Binding(get: { entry.shareMemo }, set: { entry.shareMemo = $0; changed(entry) })) {
+                    Label(S("メモも見せる", "Include Note"), systemImage: "text.bubble")
+                }
+            }
+        }
+        .font(.subheadline)
+        .foregroundColor(.dlText)
+        .tint(.dlPrimary)
+        .dlCard()
+    }
+
     private var emptyCard: some View {
         VStack(spacing: 16) {
             ZStack {
@@ -236,9 +257,21 @@ struct TodayView: View {
             context.insert(new)
         }
         try? context.save()
+        if let saved = entries.first(where: { $0.dayKey == dayKey }) ?? (try? context.fetch(FetchDescriptor<SongEntry>()))?.first(where: { $0.dayKey == dayKey }) {
+            changed(saved)
+        }
+    }
+
+    /// 保存して、フレンド機能を使っていれば共有している投稿も更新する
+    private func changed(_ entry: SongEntry) {
+        entry.updatedAt = Date()
+        try? context.save()
+        Task { await social.upload(entry) }
     }
 
     private func clear() {
+        let key = dayKey
+        Task { await social.deletePost(dayKey: key) }
         if let entry { context.delete(entry) }
         memoDraft = ""
         try? context.save()
@@ -250,8 +283,7 @@ struct TodayView: View {
         guard let target = entries.first(where: { $0.dayKey == key }) else { return }
         if target.memo != memoDraft {
             target.memo = memoDraft
-            target.updatedAt = Date()
-            try? context.save()
+            changed(target)
         }
     }
 }
