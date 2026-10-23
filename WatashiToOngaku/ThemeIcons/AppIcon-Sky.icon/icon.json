@@ -2,7 +2,7 @@
   "fill-specializations": [
     {
       "value": {
-        "solid": "srgb:0.00000,0.00000,0.00000,1.00000"
+        "automatic-gradient": "srgb:1.00000,1.00000,1.00000,1.00000"
       }
     },
     {
@@ -28,6 +28,18 @@
           }
         },
         {
+          "glass": false,
+          "image-name": "grooves.svg",
+          "name": "grooves",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
           "glass": true,
           "image-name": "disc.svg",
           "name": "disc",
@@ -37,7 +49,20 @@
               0,
               0
             ]
-          }
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.29000,0.56500,0.81200,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.29000,0.56500,0.81200,1.00000"
+              }
+            }
+          ]
         }
       ],
       "shadow": {
