@@ -11,11 +11,11 @@ enum AppIconManager {
     /// ThemeStore.accents と同じ並び。ブラック（0）は標準のアイコン
     private static let themes = ["", "White", "Rose", "Coral", "Sunset", "Lemon", "Mint", "Sky", "Lavender"]
 
-    /// テーマカラーのアイコンは Plus の特典
-    static var followsTheme: Bool { UserDefaults.standard.bool(forKey: followsThemeKey) && PlusStore.shared.isPlus }
+    static var followsTheme: Bool { UserDefaults.standard.bool(forKey: followsThemeKey) }
 
     static func iconName(accentIndex: Int, isDark: Bool) -> String? {
-        let theme = followsTheme ? themes[min(max(accentIndex, 0), themes.count - 1)] : ""
+        // カスタムカラーのアイコンは用意できないので、標準のアイコンにする
+        let theme = followsTheme && themes.indices.contains(accentIndex) ? themes[accentIndex] : ""
         let base = theme.isEmpty ? "AppIcon" : "AppIcon-\(theme)"
         if isDark { return base + "-Dark" }
         return theme.isEmpty ? nil : base

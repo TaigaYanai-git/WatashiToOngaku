@@ -204,6 +204,7 @@ final class SocialStore: ObservableObject {
         record["previewURL"] = entry.previewURL
         record["appleMusicURL"] = entry.appleMusicURL
         record["memo"] = entry.shareMemo ? entry.memo : ""
+        record["clipStart"] = entry.clipStart
         record["postedAt"] = entry.createdAt
         return record
     }
@@ -225,7 +226,8 @@ final class SocialStore: ObservableObject {
     }
 
     private static func stamp(_ entry: SongEntry) -> String {
-        [entry.songID, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)"].joined(separator: "|")
+        [entry.songID, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)",
+         entry.clipStart.map { "\($0)" } ?? "-"].joined(separator: "|")
     }
 
     /// すべての記録を置く（月・年のプレイリストでフレンドが過去の曲も聴けるように）。
@@ -273,7 +275,7 @@ final class SocialStore: ObservableObject {
     /// 招待リンク・QR コード（…/add.html?c=コード または watashitoongaku://add?c=コード）から追加する
     func addFriend(url: URL) async -> Bool {
         guard let code = Self.code(in: url) else {
-            lastError = S("私と音楽の招待リンクではありません", "This isn't a Me & Music invite link")
+            lastError = S("Our Music の招待リンクではありません", "This isn't an Our Music invite link")
             return false
         }
         return await addFriend(code: code)
@@ -497,6 +499,8 @@ struct FriendPost: Identifiable {
     let previewURL: String?
     let appleMusicURL: String?
     let memo: String
+    /// 流す30秒の始まり（秒）。nil なら Apple の試聴区間
+    let clipStart: Double?
     let postedAt: Date
 
     init(record: CKRecord, friend: Friend) {
@@ -510,6 +514,7 @@ struct FriendPost: Identifiable {
         previewURL = record["previewURL"] as? String
         appleMusicURL = record["appleMusicURL"] as? String
         memo = record["memo"] as? String ?? ""
+        clipStart = record["clipStart"] as? Double
         postedAt = record["postedAt"] as? Date ?? record.modificationDate ?? Date()
     }
 
@@ -525,6 +530,7 @@ struct FriendPost: Identifiable {
         previewURL = entry.previewURL
         appleMusicURL = entry.appleMusicURL
         memo = entry.shareMemo ? entry.memo : ""
+        clipStart = entry.clipStart
         postedAt = entry.createdAt
     }
 

@@ -9,6 +9,9 @@ struct ReviewView: View {
     @State private var span: Span = .month
     @State private var anchor = Date()
     @State private var showShare = false
+    @State private var showPlus = false
+    @State private var customStart = Calendar.current.date(byAdding: .day, value: -13, to: Date())!
+    @State private var customEnd = Date()
     @ObservedObject private var plus = PlusStore.shared
 
     enum Span: String, CaseIterable, Identifiable {
@@ -56,6 +59,7 @@ struct ReviewView: View {
                         topArtists
                         songList
                     }
+                    customPlaylistCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -73,7 +77,76 @@ struct ReviewView: View {
                 }
             }
             .sheet(isPresented: $showShare) { ShareCardSheet(title: periodTitle, entries: periodEntries) }
+            .sheet(isPresented: $showPlus) { PlusView() }
         }
+    }
+
+    // MARK: - カスタムプレイリスト
+
+    private var customKeys: (start: String, end: String) {
+        let a = DayKey.string(from: min(customStart, customEnd)), b = DayKey.string(from: max(customStart, customEnd))
+        return (a, b)
+    }
+
+    /// 選んだ期間の曲（古い順）
+    private var customEntries: [SongEntry] {
+        let keys = customKeys
+        return entries.filter { $0.dayKey >= keys.start && $0.dayKey <= keys.end }.sorted { $0.dayKey < $1.dayKey }
+    }
+
+    private var customDays: Int {
+        (calendar.dateComponents([.day], from: calendar.startOfDay(for: min(customStart, customEnd)),
+                                 to: calendar.startOfDay(for: max(customStart, customEnd))).day ?? 0) + 1
+    }
+
+    private var customTitle: String {
+        let locale = Locale(identifier: theme.language == "en" ? "en_US" : "ja_JP")
+        let style = Date.FormatStyle.dateTime.locale(locale).year().month(.defaultDigits).day()
+        return "\(min(customStart, customEnd).formatted(style)) – \(max(customStart, customEnd).formatted(style))"
+    }
+
+    /// 自分で選んだ期間に選んだ曲をまとめるプレイリスト（無料は31日まで、Plus は制限なし）
+    private var customPlaylistCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(S("カスタムプレイリスト", "Custom Playlist"), systemImage: "calendar.badge.plus")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            Text(verbatim: S("期間を選んで、その間に選んだ曲をプレイリストにできます", "Pick a date range to turn your songs into a playlist"))
+                .font(.caption)
+                .foregroundColor(.dlTextSub)
+            DatePicker(S("開始", "From"), selection: $customStart, in: ...Date(), displayedComponents: .date)
+            DatePicker(S("終了", "To"), selection: $customEnd, in: ...Date(), displayedComponents: .date)
+            Text(verbatim: S("\(customDays)日間・\(customEntries.count)曲", "\(customDays) days · \(customEntries.count) songs"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlText)
+            if !customEntries.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(customEntries.prefix(20)) { ArtworkView(url: $0.artworkURL, cornerRadius: 6).frame(width: 40, height: 40) }
+                    }
+                }
+            }
+            if customDays > PlusStore.freeCustomPlaylistDays && !plus.isPlus {
+                VStack(spacing: 8) {
+                    Label(S("\(PlusStore.freeCustomPlaylistDays)日より長い期間は Plus で作れます", "Ranges over \(PlusStore.freeCustomPlaylistDays) days need Plus"),
+                          systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundColor(.dlTextSub)
+                    Button(S("Plus について見る", "Learn About Plus")) { showPlus = true }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            } else {
+                PlaylistActions(songIDs: customEntries.map(\.songID),
+                                name: S("Our Music \(customTitle)", "Our Music \(customTitle)"),
+                                description: S("Our Music で選んだ、\(customTitle)の今日の一曲", "My songs of the day, \(customTitle), from Our Music"),
+                                key: "custom-\(customKeys.start)-\(customKeys.end)")
+            }
+        }
+        .font(.subheadline)
+        .foregroundColor(.dlText)
+        .tint(.dlPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dlCard()
     }
 
     /// この月・年に選んだ曲を Apple Music で聴く（年は Plus）
@@ -88,8 +161,8 @@ struct ReviewView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.dlTextSub)
                 PlaylistActions(songIDs: periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID),
-                                name: S("私と音楽 \(periodTitle)", "Me & Music \(periodTitle)"),
-                                description: S("私と音楽で選んだ、\(periodTitle)の今日の一曲", "My songs of the day in \(periodTitle), from Me & Music"),
+                                name: S("Our Music \(periodTitle)", "Our Music \(periodTitle)"),
+                                description: S("Our Music で選んだ、\(periodTitle)の今日の一曲", "My songs of the day in \(periodTitle), from Our Music"),
                                 key: "mine-\(prefix)")
             }
             .dlCard()
@@ -176,7 +249,8 @@ struct ReviewView: View {
                 } label: {
                     HStack(spacing: 12) {
                         PlayableArtwork(id: entry.songID, artworkURL: entry.artworkURL,
-                                        previewURL: entry.previewURL, size: 52, cornerRadius: 8)
+                                        previewURL: entry.previewURL, size: 52, cornerRadius: 8,
+                                        songID: entry.songID, clipStart: entry.clipStart)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
                             Text(entry.artist).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)

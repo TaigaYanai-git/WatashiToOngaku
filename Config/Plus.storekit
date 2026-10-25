@@ -14,9 +14,9 @@
     {
       "id" : "21500001",
       "localizations" : [
-        { "description" : "", "displayName" : "私と音楽 Plus", "locale" : "ja" }
+        { "description" : "", "displayName" : "Our Music Plus", "locale" : "ja" }
       ],
-      "name" : "私と音楽 Plus",
+      "name" : "Our Music Plus",
       "subscriptions" : [
         {
           "adHocOffers" : [],
@@ -27,7 +27,7 @@
           "internalID" : "21500002",
           "introductoryOffer" : null,
           "localizations" : [
-            { "description" : "月・年のプレイリスト、すべてのテーマカラーなど", "displayName" : "Plus（月額）", "locale" : "ja" }
+            { "description" : "カスタムカラー、1年のプレイリスト、長い期間のカスタムプレイリスト", "displayName" : "Plus（月額）", "locale" : "ja" }
           ],
           "productID" : "com.taigayanai.watashitoongaku.plus.monthly",
           "recurringSubscriptionPeriod" : "P1M",
@@ -49,7 +49,7 @@
             "subscriptionPeriod" : "P1W"
           },
           "localizations" : [
-            { "description" : "月・年のプレイリスト、すべてのテーマカラーなど", "displayName" : "Plus（年額）", "locale" : "ja" }
+            { "description" : "カスタムカラー、1年のプレイリスト、長い期間のカスタムプレイリスト", "displayName" : "Plus（年額）", "locale" : "ja" }
           ],
           "productID" : "com.taigayanai.watashitoongaku.plus.yearly",
           "recurringSubscriptionPeriod" : "P1Y",

@@ -98,7 +98,7 @@ private struct ShareCard: View {
             }
             HStack(spacing: 6) {
                 Image("TodayTabIcon").resizable().renderingMode(.template).frame(width: 14, height: 14)
-                Text(verbatim: S("私と音楽 ・ 1日1曲の音楽日記", "Me & Music · one song a day"))
+                Text(verbatim: S("Our Music ・ 1日1曲の音楽日記", "Our Music · one song a day"))
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(.dlPrimary)

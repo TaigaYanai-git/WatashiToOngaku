@@ -24,9 +24,6 @@ enum PlaylistSpan: String, CaseIterable, Identifiable {
         }
     }
 
-    /// みんなのプレイリストで Plus が必要な期間
-    var needsPlus: Bool { self == .month || self == .year }
-
     func interval(containing date: Date) -> DateInterval {
         Calendar.current.dateInterval(of: component, for: date) ?? DateInterval(start: date, duration: 86_400)
     }
@@ -62,12 +59,18 @@ struct PlaylistActions: View {
     @State private var message: String?
     @State private var showOffer = false
     @State private var savedName: String?
+    @AppStorage("playlist_shuffle") private var shuffle = false
 
     var body: some View {
         VStack(spacing: 10) {
+            Picker("", selection: $shuffle) {
+                Label(S("順番に再生", "In Order"), systemImage: "list.number").tag(false)
+                Label(S("シャッフル", "Shuffle"), systemImage: "shuffle").tag(true)
+            }
+            .pickerStyle(.segmented)
             HStack(spacing: 10) {
-                button("play.fill", S("Apple Musicで再生", "Play in Apple Music"), id: "play") {
-                    try await AppleMusicService.play(songIDs)
+                button(shuffle ? "shuffle" : "play.fill", S("Apple Musicで再生", "Play in Apple Music"), id: "play") {
+                    try await AppleMusicService.play(songIDs, shuffle: shuffle)
                 }
                 button("plus.square.on.square", S("ライブラリに保存", "Save to Library"), id: "save") {
                     try await AppleMusicService.save(songIDs, name: name, description: description, key: key)
@@ -128,7 +131,8 @@ struct PlaylistRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PlayableArtwork(id: post.id, artworkURL: post.artworkURL, previewURL: post.previewURL, size: 52, cornerRadius: 8)
+            PlayableArtwork(id: post.id, artworkURL: post.artworkURL, previewURL: post.previewURL, size: 52, cornerRadius: 8,
+                            songID: post.songID, clipStart: post.clipStart)
             VStack(alignment: .leading, spacing: 2) {
                 Text(post.title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
                 Text(post.artist).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
@@ -148,47 +152,43 @@ struct PlaylistRow: View {
     }
 }
 
-/// 自分を含めたフレンドみんなが選んだ曲の、日・週・月・年のプレイリスト
+/// 自分を含めたフレンドみんなが、その日に選んだ曲のプレイリスト
 struct GroupPlaylistView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var social = SocialStore.shared
-    @ObservedObject private var plus = PlusStore.shared
-    @State var span: PlaylistSpan
-    @State private var anchor = Date()
+    @State private var day = Date()
     @State private var posts: [FriendPost] = []
     @State private var loading = false
 
-    private var range: DateInterval { span.interval(containing: anchor) }
-    private var canGoForward: Bool { range.end <= Date() }
-    private var locked: Bool { span.needsPlus && !plus.isPlus }
+    private var dayTitle: String { PlaylistSpan.day.title(for: day) }
+    private var canGoForward: Bool { !Calendar.current.isDateInToday(day) }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    Picker("", selection: $span) {
-                        ForEach(PlaylistSpan.allCases) { span in
-                            Text(span.needsPlus && !plus.isPlus ? "\(span.label) 🔒" : span.label).tag(span)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    PeriodHeader(title: dayTitle, canGoForward: canGoForward) { shift($0) }
 
-                    PeriodHeader(title: span.title(for: anchor), canGoForward: canGoForward) { shift($0) }
-
-                    if locked {
-                        PlusLockedCard(title: S("みんなの\(span == .month ? "1か月" : "1年")ぶんの曲を、Apple Music でまとめて聴けます",
-                                                "Listen to everyone's songs from the whole \(span == .month ? "month" : "year")"))
-                    } else if loading && posts.isEmpty {
+                    if loading && posts.isEmpty {
                         ProgressView().tint(.dlPrimary).padding(40)
                     } else if posts.isEmpty {
-                        emptyCard
+                        VStack(spacing: 10) {
+                            Image(systemName: "music.note.list").font(.largeTitle).foregroundColor(.dlTextLight)
+                            Text(verbatim: S("この日に選ばれた曲はまだありません", "No songs on this day yet"))
+                                .font(.subheadline).foregroundColor(.dlTextSub)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .dlCard(padding: 32)
                     } else {
-                        summary
+                        Text(verbatim: S("\(posts.count)人が選んだ曲", "Songs from \(posts.count) people"))
+                            .font(.subheadline)
+                            .foregroundColor(.dlTextSub)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         PlaylistActions(songIDs: posts.map(\.songID),
-                                        name: S("私と音楽 みんなの\(span.title(for: anchor))", "Me & Music: Everyone, \(span.title(for: anchor))"),
-                                        description: S("私と音楽で、自分とフレンドが選んだ曲", "Songs picked by me and my friends in Me & Music"),
-                                        key: "group-\(span.rawValue)-\(DayKey.string(from: range.start))")
+                                        name: S("Our Music みんなの\(dayTitle)", "Our Music: Everyone, \(dayTitle)"),
+                                        description: S("Our Music で、自分とフレンドが選んだ曲", "Songs picked by me and my friends in Our Music"),
+                                        key: "group-day-\(DayKey.string(from: day))")
                         VStack(spacing: 12) {
                             ForEach(posts) { PlaylistRow(post: $0) }
                         }
@@ -199,7 +199,7 @@ struct GroupPlaylistView: View {
                 .padding(.vertical, 12)
             }
             .background(DlBackground().ignoresSafeArea())
-            .navigationTitle(Text(verbatim: S("みんなのプレイリスト", "Everyone's Playlist")))
+            .navigationTitle(Text(verbatim: S("みんなの今日のプレイリスト", "Everyone's Daily Playlist")))
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
             .toolbar {
@@ -207,41 +207,21 @@ struct GroupPlaylistView: View {
                     Button(S("閉じる", "Close")) { dismiss() }.foregroundColor(.dlPrimary)
                 }
             }
-            .task(id: "\(span.rawValue)-\(DayKey.string(from: range.start))-\(locked)") { await load() }
+            .task(id: DayKey.string(from: day)) { await load() }
             .onDisappear { PreviewPlayer.shared.stop() }
         }
     }
 
-    private var summary: some View {
-        let people = Set(posts.map(\.friend.code)).count
-        return Text(verbatim: S("\(people)人が選んだ\(posts.count)曲", "\(posts.count) songs from \(people) people"))
-            .font(.subheadline)
-            .foregroundColor(.dlTextSub)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var emptyCard: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "music.note.list").font(.largeTitle).foregroundColor(.dlTextLight)
-            Text(verbatim: S("この期間に選ばれた曲はまだありません", "No songs in this period yet"))
-                .font(.subheadline).foregroundColor(.dlTextSub)
-        }
-        .frame(maxWidth: .infinity)
-        .dlCard(padding: 32)
-    }
-
     private func load() async {
-        guard !locked else { posts = []; return }
         loading = true
         defer { loading = false }
-        let found = await social.posts(from: range.start, to: range.end.addingTimeInterval(-1))
+        let found = await social.posts(from: day, to: day)
         guard !Task.isCancelled else { return }
-        // 日付の古い順、同じ日は選んだ順
-        posts = found.sorted { ($0.dayKey, $0.postedAt) < ($1.dayKey, $1.postedAt) }
+        posts = found.sorted { $0.postedAt < $1.postedAt }
     }
 
     private func shift(_ delta: Int) {
-        if let d = Calendar.current.date(byAdding: span.component, value: delta, to: anchor) { anchor = d }
+        if let d = Calendar.current.date(byAdding: .day, value: delta, to: day), d <= Date() { day = d }
     }
 }
 

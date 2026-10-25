@@ -194,7 +194,8 @@ struct MusicPickerSheet: View {
             albumTitle: song.albumTitle ?? "",
             artworkURL: song.artwork?.url(width: 600, height: 600)?.absoluteString ?? "",
             previewURL: song.previewAssets?.first?.url?.absoluteString,
-            appleMusicURL: song.url?.absoluteString
+            appleMusicURL: song.url?.absoluteString,
+            duration: song.duration ?? 0
         ))
         dismiss()
     }

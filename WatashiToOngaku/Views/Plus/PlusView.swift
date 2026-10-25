@@ -1,7 +1,7 @@
 import StoreKit
 import SwiftUI
 
-/// 「私と音楽 Plus」の案内と購入。値段・期間・自動更新の説明・復元は StoreKit の画面に任せる
+/// 「Our Music Plus」の案内と購入。値段・期間・自動更新の説明・復元は StoreKit の画面に任せる
 struct PlusView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var plus = PlusStore.shared
@@ -14,21 +14,21 @@ struct PlusView: View {
                         .font(.system(size: 44))
                         .foregroundStyle(LinearGradient.dlPrimary)
                         .padding(.top, 28)
-                    Text(verbatim: S("私と音楽 Plus", "Me & Music Plus"))
+                    Text(verbatim: S("Our Music Plus", "Our Music Plus"))
                         .font(.title2.weight(.bold))
                         .foregroundColor(.dlText)
-                    Text(verbatim: S("毎日の記録とフレンド機能は、これからも無料です。Plus では、音楽をもっと楽しむ機能が使えます。",
-                                     "Daily songs and friends stay free. Plus adds more ways to enjoy your music."))
+                    Text(verbatim: S("毎日の記録、フレンド、すべてのテーマカラーと背景は、これからも無料です。Plus では、音楽をもっと楽しむ機能が使えます。",
+                                     "Daily songs, friends and all theme colors stay free. Plus adds more ways to enjoy your music."))
                         .font(.subheadline)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 14) {
-                        benefit("music.note.list", S("月・年のプレイリスト", "Monthly & yearly playlists"),
-                                S("自分とフレンドが選んだ1か月・1年ぶんの曲を、Apple Music でまとめて聴けます", "Listen to a month or a year of songs from you and your friends in Apple Music"))
-                        benefit("paintpalette", S("すべてのテーマカラーと背景", "All theme colors & patterns"),
-                                S("9色のテーマカラーと6種類の背景から選べます", "Choose from 9 colors and 6 background patterns"))
-                        benefit("app.badge", S("テーマカラーのアイコン", "Theme-colored app icon"),
-                                S("ホーム画面のアイコンもテーマカラーにできます", "Match your Home Screen icon to your theme"))
+                        benefit("paintpalette", S("カスタムカラー", "Custom colors"),
+                                S("9色のテーマカラーに加えて、好きな色をアプリの色にできます", "Pick any color you like for the app, beyond the 9 theme colors"))
+                        benefit("music.note.list", S("1年のプレイリスト", "Yearly playlists"),
+                                S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます", "Listen to a whole year of your songs in Apple Music"))
+                        benefit("calendar.badge.clock", S("長い期間のカスタムプレイリスト", "Longer custom playlists"),
+                                S("好きな期間の曲をまとめるプレイリストを、\(PlusStore.freeCustomPlaylistDays)日より長い期間でも作れます", "Make custom playlists longer than \(PlusStore.freeCustomPlaylistDays) days"))
                         benefit("heart", S("開発を応援", "Support development"),
                                 S("広告なしで続けていくための力になります", "Helps keep the app ad-free"))
                     }
@@ -73,7 +73,7 @@ struct PlusLockedCard: View {
         VStack(spacing: 12) {
             Image(systemName: "lock.fill").font(.title2).foregroundColor(.dlPrimary)
             Text(verbatim: title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).multilineTextAlignment(.center)
-            Text(verbatim: S("私と音楽 Plus で使えます", "Available with Me & Music Plus"))
+            Text(verbatim: S("Our Music Plus で使えます", "Available with Our Music Plus"))
                 .font(.caption).foregroundColor(.dlTextSub)
             Button(S("Plus について見る", "Learn About Plus")) { showPlus = true }
                 .buttonStyle(PrimaryButtonStyle())

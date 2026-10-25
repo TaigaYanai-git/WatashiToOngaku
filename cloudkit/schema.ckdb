@@ -1,4 +1,4 @@
-// 私と音楽の CloudKit スキーマ（公開データベース）。開発環境はこの内容に合わせてある。
+// Our Music の CloudKit スキーマ（公開データベース）。開発環境はこの内容に合わせてある。
 // 方針：どのフィールドにも検索用の索引（QUERYABLE / SEARCHABLE / SORTABLE）を付けない。
 //   開発環境ではアプリが新しいフィールドを保存すると CloudKit が自動で索引を付けるので、
 //   フィールドを増やすときは先にコンソールで（索引なしで）追加してから使うこと。
@@ -48,6 +48,7 @@ DEFINE SCHEMA
         appleMusicURL   STRING,
         artist          STRING,
         artworkURL      STRING,
+        clipStart       DOUBLE,
         dayKey          STRING,
         memo            STRING,
         postedAt        TIMESTAMP,

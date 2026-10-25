@@ -11,6 +11,7 @@ struct TodayView: View {
     @ObservedObject private var social = SocialStore.shared
 
     @State private var showPicker = false
+    @State private var showClipRange = false
     @State private var memoDraft = ""
     @FocusState private var memoFocused: Bool
 
@@ -53,6 +54,15 @@ struct TodayView: View {
             }
             .sheet(isPresented: $showPicker) {
                 MusicPickerSheet(hasSelection: entry != nil, onSelect: select, onClear: clear)
+            }
+            .sheet(isPresented: $showClipRange) {
+                if let entry {
+                    ClipRangeSheet(entry: entry) { clipStart, duration in
+                        entry.clipStart = clipStart
+                        if duration > 0 { entry.duration = duration }
+                        changed(entry)
+                    }
+                }
             }
             .onAppear { memoDraft = entry?.memo ?? "" }
             .onChange(of: dayKey) { oldKey, _ in
@@ -103,7 +113,7 @@ struct TodayView: View {
     private func songCard(_ entry: SongEntry) -> some View {
         VStack(spacing: 16) {
             PlayableArtwork(id: entry.songID, artworkURL: entry.artworkURL, previewURL: entry.previewURL,
-                            size: 250, cornerRadius: 20)
+                            size: 250, cornerRadius: 20, songID: entry.songID, clipStart: entry.clipStart)
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
             VStack(spacing: 4) {
                 Text(entry.title)
@@ -118,6 +128,18 @@ struct TodayView: View {
                         .font(.caption)
                         .foregroundColor(.dlTextLight)
                 }
+            }
+            // 流す30秒の範囲
+            Button { showClipRange = true } label: {
+                Label(entry.clipStart.map { S("流す30秒：\(ClipRangeSheet.time($0))〜", "Plays from \(ClipRangeSheet.time($0))") }
+                      ?? S("流す30秒を選ぶ", "Choose the 30 Seconds"),
+                      systemImage: "waveform")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.dlPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.dlPrimaryBg)
+                    .clipShape(Capsule())
             }
             HStack(spacing: 10) {
                 if let link = entry.appleMusicURL.flatMap(URL.init(string:)) {

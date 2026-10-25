@@ -47,7 +47,7 @@ final class ReminderStore {
         guard isEnabled else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = S("私と音楽", "Me & Music")
+        content.title = S("Our Music", "Our Music")
         content.body = Self.messages.randomElement() ?? Self.messages[0]
         content.sound = .default
 

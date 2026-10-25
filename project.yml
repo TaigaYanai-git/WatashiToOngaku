@@ -93,7 +93,7 @@ targets:
     info:
       path: WatashiToOngaku/Info.plist
       properties:
-        CFBundleDisplayName: 私と音楽
+        CFBundleDisplayName: Our Music
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: ja

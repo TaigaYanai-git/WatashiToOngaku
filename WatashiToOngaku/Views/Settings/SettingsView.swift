@@ -51,9 +51,7 @@ struct SettingsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(ThemeStore.accents) { accent in
-                        let locked = !plus.isPlus && !PlusStore.freeAccents.contains(accent.id)
                         Button {
-                            guard !locked else { showPlus = true; return }
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 theme.accentIndex = accent.id
                             }
@@ -77,10 +75,6 @@ struct SettingsView: View {
                                         Image(systemName: "checkmark")
                                             .font(.caption2.weight(.bold))
                                             .foregroundColor(accent.needsBorder ? Color.dlText : .white)
-                                    } else if locked {
-                                        Image(systemName: "lock.fill")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white.opacity(0.9))
                                     }
                                 }
                                 .scaleEffect(theme.accentIndex == accent.id ? 1.12 : 1.0)
@@ -93,6 +87,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    customColorButton
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
@@ -153,19 +148,15 @@ struct SettingsView: View {
                     Image(systemName: "app.badge").font(.body).foregroundColor(.dlPrimary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
-                        if !plus.isPlus { Image(systemName: "lock.fill").font(.caption2) }
-                    }
-                    .font(.subheadline)
-                    .foregroundColor(.dlText)
+                    Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
+                        .font(.subheadline)
+                        .foregroundColor(.dlText)
                     Text(verbatim: S("切り替えるたびに iOS のお知らせが出ます", "iOS shows a notice each time it changes"))
                         .font(.caption2)
                         .foregroundColor(.dlTextSub)
                 }
                 Spacer()
-                Toggle("", isOn: Binding(get: { iconFollowsTheme && plus.isPlus },
-                                         set: { if plus.isPlus { iconFollowsTheme = $0 } else { showPlus = true } }))
+                Toggle("", isOn: $iconFollowsTheme)
                     .tint(.dlPrimary)
                     .labelsHidden()
             }
@@ -181,12 +172,46 @@ struct SettingsView: View {
         }
     }
 
+    /// カスタムカラー（Plus）：好きな色を選べる
+    private var customColorButton: some View {
+        let selected = theme.isCustom
+        let rainbow = AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center)
+        return VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(selected ? AnyShapeStyle(Color(theme.customColor)) : AnyShapeStyle(rainbow))
+                    .frame(width: 36, height: 36)
+                    .shadow(color: .black.opacity(selected ? 0.3 : 0.12), radius: selected ? 8 : 3, y: 2)
+                Image(systemName: selected ? "checkmark" : (plus.isPlus ? "plus" : "lock.fill"))
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                if plus.isPlus {
+                    // 色を選ぶ画面は ColorPicker に任せる（見た目は上の丸、タップだけ受ける）
+                    ColorPicker("", selection: Binding(
+                        get: { Color(theme.customColor) },
+                        set: { color in
+                            theme.customColorHex = UIColor(color).hexString
+                            theme.accentIndex = ThemeStore.customIndex
+                        }), supportsOpacity: false)
+                        .labelsHidden()
+                        .scaleEffect(1.6)
+                        .opacity(0.02)
+                } else {
+                    Button { showPlus = true } label: { Color.clear.frame(width: 36, height: 36) }
+                }
+            }
+            .frame(width: 36, height: 36)
+            .scaleEffect(selected ? 1.12 : 1.0)
+            Text(verbatim: S("カスタム", "Custom"))
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(selected ? .dlPrimary : .dlTextSub)
+        }
+    }
+
     private func bgPatternButton(pattern: BgPattern) -> some View {
         let selected = theme.bgPatternIndex == pattern.rawValue
         let label = theme.language == "en" ? pattern.labelEn : pattern.label
-        let locked = !plus.isPlus && !PlusStore.freePatterns.contains(pattern.rawValue)
         return Button {
-            guard !locked else { showPlus = true; return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 theme.bgPatternIndex = pattern.rawValue
             }
@@ -209,10 +234,7 @@ struct SettingsView: View {
                         )
                         .frame(width: 72, height: 48)
                 }
-                HStack(spacing: 3) {
-                    if locked { Image(systemName: "lock.fill").font(.system(size: 9)) }
-                    Text(label)
-                }
+                Text(label)
                 .font(.caption.weight(selected ? .semibold : .regular))
                 .foregroundColor(selected ? .dlPrimary : .dlTextSub)
             }
@@ -234,10 +256,10 @@ struct SettingsView: View {
                     .background(LinearGradient.dlPrimary)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: S("私と音楽 Plus", "Me & Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                    Text(verbatim: S("Our Music Plus", "Our Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: plus.isPlus
                          ? S("ご利用ありがとうございます。タップで登録を管理", "Thanks for your support. Tap to manage")
-                         : S("月・年のプレイリスト、すべてのテーマカラーなど", "Monthly & yearly playlists, all theme colors and more"))
+                         : S("好きな色のカスタムカラー、1年のプレイリストなど", "Custom colors, yearly playlists and more"))
                         .font(.caption)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.leading)

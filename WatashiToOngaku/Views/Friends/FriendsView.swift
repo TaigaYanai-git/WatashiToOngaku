@@ -67,9 +67,9 @@ struct FriendsView: View {
             HStack(spacing: 10) {
                 if let url = social.inviteURL {
                     ShareLink(item: url,
-                              subject: Text(verbatim: S("私と音楽", "Me & Music")),
-                              message: Text(verbatim: S("「私と音楽」でフレンドになろう！フレンドコード：\(social.friendCode)",
-                                                        "Be my friend on Me & Music! Code: \(social.friendCode)"))) {
+                              subject: Text(verbatim: S("Our Music", "Our Music")),
+                              message: Text(verbatim: S("「Our Music」でフレンドになろう！フレンドコード：\(social.friendCode)",
+                                                        "Be my friend on Our Music! Code: \(social.friendCode)"))) {
                         Label(S("招待リンクを送る", "Send Invite"), systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(SecondaryButtonStyle())

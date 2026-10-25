@@ -76,6 +76,9 @@ struct PlayableArtwork: View {
     /// nil なら横幅いっぱいの正方形
     var size: CGFloat?
     var cornerRadius: CGFloat = 16
+    /// 流す範囲が選ばれていれば、Apple Music の契約者にはその30秒を流す
+    var songID: String?
+    var clipStart: Double?
     @ObservedObject private var player = PreviewPlayer.shared
 
     var body: some View {
@@ -95,7 +98,9 @@ struct PlayableArtwork: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { player.toggle(id: id, url: previewURL.flatMap(URL.init(string:))) }
+            .onTapGesture {
+                player.toggle(id: id, url: previewURL.flatMap(URL.init(string:)), songID: songID, clipStart: clipStart)
+            }
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(playing ? S("試聴を止める", "Stop preview") : S("試聴する", "Play preview"))
     }

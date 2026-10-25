@@ -4,12 +4,11 @@ import SwiftUI
 struct TimelineView: View {
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var social = SocialStore.shared
-    @ObservedObject private var plus = PlusStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
     @State private var showProfile = false
     @State private var reporting: FriendPost?
-    @State private var playlistSpan: PlaylistSpan?
+    @State private var showPlaylist = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +34,14 @@ struct TimelineView: View {
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }
+                    // みんなの今日のプレイリストは、目立たないよう右上の小さなボタンにまとめる
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button { showPlaylist = true } label: {
+                            Image(systemName: "music.note.list")
+                        }
+                        .foregroundColor(.dlPrimary)
+                        .accessibilityLabel(S("みんなの今日のプレイリスト", "Everyone's Daily Playlist"))
+                    }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button { showFriends = true } label: {
                             Image(systemName: "person.2.badge.plus")
@@ -45,7 +52,7 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
-            .sheet(item: $playlistSpan) { GroupPlaylistView(span: $0) }
+            .sheet(isPresented: $showPlaylist) { GroupPlaylistView() }
             .sheet(isPresented: $showProfile) {
                 VStack(spacing: 20) {
                     Text(verbatim: S("プロフィール", "Profile")).font(.headline).foregroundColor(.dlText)
@@ -74,7 +81,6 @@ struct TimelineView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                playlistCard
                 if social.timeline.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
@@ -101,34 +107,6 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
-    }
-
-    /// 自分とフレンドが選んだ曲をまとめた、日・週・月・年のプレイリスト
-    private var playlistCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(S("みんなのプレイリスト", "Everyone's Playlist"), systemImage: "music.note.list")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.dlTextSub)
-            HStack(spacing: 8) {
-                ForEach(PlaylistSpan.allCases) { span in
-                    Button { playlistSpan = span } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: span.needsPlus && !plus.isPlus ? "lock.fill" : "play.circle.fill")
-                                .font(.title3)
-                            Text(verbatim: [S("今日", "Today"), S("今週", "Week"), S("今月", "Month"), S("今年", "Year")][PlaylistSpan.allCases.firstIndex(of: span)!])
-                                .font(.caption.weight(.semibold))
-                        }
-                        .foregroundColor(.dlPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color.dlPrimaryBg)
-                        .cornerRadius(12)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .dlCard()
     }
 
     private func message_(_ text: String) -> some View {
@@ -175,7 +153,7 @@ private struct PostCard: View {
             }
             HStack(spacing: 14) {
                 PlayableArtwork(id: post.id, artworkURL: post.artworkURL, previewURL: post.previewURL,
-                                size: 88, cornerRadius: 12)
+                                size: 88, cornerRadius: 12, songID: post.songID, clipStart: post.clipStart)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(post.title).font(.headline).foregroundColor(.dlText).lineLimit(2)
                     Text(post.artist).font(.subheadline).foregroundColor(.dlTextSub).lineLimit(1)

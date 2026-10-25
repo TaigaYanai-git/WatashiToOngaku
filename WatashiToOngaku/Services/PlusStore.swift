@@ -1,9 +1,9 @@
 import Combine
 import StoreKit
 
-/// 「私と音楽 Plus」（自動更新サブスクリプション）の購入状態。
-/// 毎日の記録・フレンド・今日と今週のプレイリストは無料のまま。
-/// Plus では、月・年のプレイリスト、すべてのテーマカラーと背景、テーマカラーのアイコンが使える。
+/// 「Our Music Plus」（自動更新サブスクリプション）の購入状態。
+/// 記録・フレンド・すべてのテーマカラーと背景・アイコン・月のプレイリストは無料。
+/// Plus では、カスタムカラー（好きな色）、1年のプレイリスト、期間の制限がないカスタムプレイリストが使える。
 @MainActor
 final class PlusStore: ObservableObject {
     static let shared = PlusStore()
@@ -11,9 +11,8 @@ final class PlusStore: ObservableObject {
     static let productIDs = ["com.taigayanai.watashitoongaku.plus.monthly",
                              "com.taigayanai.watashitoongaku.plus.yearly"]
 
-    /// 無料で使えるテーマカラー（ThemeStore.accents の番号）と背景
-    static let freeAccents: Set<Int> = [0, 1]
-    static let freePatterns: Set<Int> = [BgPattern.none.rawValue, BgPattern.dots.rawValue]
+    /// 無料で作れるカスタムプレイリストの長さ（日）
+    static let freeCustomPlaylistDays = 31
 
     @Published private(set) var isPlus: Bool
 
@@ -57,11 +56,9 @@ final class PlusStore: ObservableObject {
         if !active { Self.resetPlusOnlySettings() }
     }
 
-    /// Plus が切れたら、Plus 専用の色・背景・アイコンを無料のものに戻す
+    /// Plus が切れたら、カスタムカラーを標準の色に戻す
     private static func resetPlusOnlySettings() {
         let theme = ThemeStore.shared
-        if !freeAccents.contains(theme.accentIndex) { theme.accentIndex = 0 }
-        if !freePatterns.contains(theme.bgPatternIndex) { theme.bgPatternIndex = BgPattern.dots.rawValue }
-        AppIconManager.apply()
+        if theme.isCustom { theme.accentIndex = 0 }
     }
 }

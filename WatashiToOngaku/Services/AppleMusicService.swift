@@ -50,13 +50,14 @@ enum AppleMusicService {
         return songs
     }
 
-    /// ミュージックアプリで、並べた順に再生する
-    static func play(_ ids: [String]) async throws {
+    /// ミュージックアプリで、並べた順に（shuffle ならランダムな順に）再生する
+    static func play(_ ids: [String], shuffle: Bool = false) async throws {
         try await prepare()
         let songs = try await songs(for: ids)
         PreviewPlayer.shared.stop()
         let player = SystemMusicPlayer.shared
-        player.queue = SystemMusicPlayer.Queue(for: songs)
+        player.queue = SystemMusicPlayer.Queue(for: shuffle ? songs.shuffled() : songs)
+        player.state.shuffleMode = shuffle ? .songs : .off
         try await player.play()
     }
 
@@ -74,7 +75,7 @@ enum AppleMusicService {
             }
         }
         let playlist = try await MusicLibrary.shared.createPlaylist(
-            name: name, description: description, authorDisplayName: S("私と音楽", "Me & Music"), items: songs)
+            name: name, description: description, authorDisplayName: S("Our Music", "Our Music"), items: songs)
         UserDefaults.standard.set(playlist.id.rawValue, forKey: storeKey)
     }
 
