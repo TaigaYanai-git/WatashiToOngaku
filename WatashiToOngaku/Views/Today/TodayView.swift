@@ -134,12 +134,8 @@ struct TodayView: View {
                 Label(entry.clipStart.map { S("流す30秒：\(ClipRangeSheet.time($0))〜", "Plays from \(ClipRangeSheet.time($0))") }
                       ?? S("流す30秒を選ぶ", "Choose the 30 Seconds"),
                       systemImage: "waveform")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.dlPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.dlPrimaryBg)
-                    .clipShape(Capsule())
+                    .font(.caption2)
+                    .foregroundColor(.dlTextLight)
             }
             HStack(spacing: 10) {
                 if let link = entry.appleMusicURL.flatMap(URL.init(string:)) {

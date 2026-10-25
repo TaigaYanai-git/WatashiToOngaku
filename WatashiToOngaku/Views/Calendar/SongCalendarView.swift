@@ -7,6 +7,7 @@ struct SongCalendarView: View {
     @EnvironmentObject private var theme: ThemeStore
     @Query private var entries: [SongEntry]
     @State private var month = Calendar.current.dateInterval(of: .month, for: Date())!.start
+    @State private var showCustomPlaylist = false
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
@@ -42,6 +43,20 @@ struct SongCalendarView: View {
             .navigationTitle(Text(verbatim: S("カレンダー", "Calendar")))
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(S("カスタムプレイリストを作る", "Create Custom Playlist"), systemImage: "music.note.list") {
+                            showCustomPlaylist = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .foregroundColor(.dlPrimary)
+                    .accessibilityLabel(S("メニュー", "Menu"))
+                }
+            }
+            .sheet(isPresented: $showCustomPlaylist) { CustomPlaylistView() }
         }
     }
 
