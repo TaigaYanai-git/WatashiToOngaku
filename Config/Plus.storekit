@@ -1,0 +1,65 @@
+{
+  "identifier" : "8F3C2B1A",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "ja_JP",
+    "_storefront" : "JPN",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500001",
+      "localizations" : [
+        { "description" : "", "displayName" : "私と音楽 Plus", "locale" : "ja" }
+      ],
+      "name" : "私と音楽 Plus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "300",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "21500002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            { "description" : "月・年のプレイリスト、すべてのテーマカラーなど", "displayName" : "Plus（月額）", "locale" : "ja" }
+          ],
+          "productID" : "com.taigayanai.watashitoongaku.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Plus Monthly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "2400",
+          "familyShareable" : true,
+          "groupNumber" : 1,
+          "internalID" : "21500003",
+          "introductoryOffer" : {
+            "internalID" : "21500004",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            { "description" : "月・年のプレイリスト、すべてのテーマカラーなど", "displayName" : "Plus（年額）", "locale" : "ja" }
+          ],
+          "productID" : "com.taigayanai.watashitoongaku.plus.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Plus Yearly",
+          "subscriptionGroupID" : "21500001",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        }
+      ]
+    }
+  ],
+  "version" : { "major" : 4, "minor" : 0 }
+}

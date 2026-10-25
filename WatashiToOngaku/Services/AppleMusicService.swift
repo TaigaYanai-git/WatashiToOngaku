@@ -1,0 +1,85 @@
+import MusicKit
+import UIKit
+
+/// プレイリストを Apple Music で聴く：ミュージックアプリで続けて再生する、またはライブラリにプレイリストとして保存する。
+/// どちらも Apple Music の契約が必要（検索と試聴は契約なしで使える）。
+@MainActor
+enum AppleMusicService {
+    enum Failure: LocalizedError {
+        case notAuthorized
+        /// 契約していない。canSubscribe なら Apple Music の案内（無料トライアルなど）を出せる
+        case noSubscription(canSubscribe: Bool)
+        case noSongs
+
+        var errorDescription: String? {
+            switch self {
+            case .notAuthorized:
+                return S("Apple Music へのアクセスが許可されていません。設定アプリで許可してください。",
+                         "Apple Music access isn't allowed. Please enable it in Settings.")
+            case .noSubscription:
+                return S("Apple Music で聴くには、Apple Music の契約が必要です。",
+                         "An Apple Music subscription is needed to listen in Apple Music.")
+            case .noSongs:
+                return S("Apple Music で見つかる曲がありませんでした。", "No songs were found in Apple Music.")
+            }
+        }
+    }
+
+    /// 許可と契約を確かめる
+    private static func prepare() async throws {
+        var status = MusicAuthorization.currentStatus
+        if status == .notDetermined { status = await MusicAuthorization.request() }
+        guard status == .authorized else { throw Failure.notAuthorized }
+        let subscription = try await MusicSubscription.current
+        guard subscription.canPlayCatalogContent else {
+            throw Failure.noSubscription(canSubscribe: subscription.canBecomeSubscriber)
+        }
+    }
+
+    /// カタログ ID から曲を取り出す（並びはそのまま、同じ曲は1回だけ）
+    private static func songs(for ids: [String]) async throws -> [Song] {
+        var seen = Set<String>()
+        let unique = ids.filter { !$0.isEmpty && !$0.hasPrefix("sample") && seen.insert($0).inserted }
+        var found: [MusicItemID: Song] = [:]
+        for chunk in unique.chunked(100) {
+            let request = MusicCatalogResourceRequest<Song>(matching: \.id, memberOf: chunk.map { MusicItemID($0) })
+            for song in try await request.response().items { found[song.id] = song }
+        }
+        let songs = unique.compactMap { found[MusicItemID($0)] }
+        guard !songs.isEmpty else { throw Failure.noSongs }
+        return songs
+    }
+
+    /// ミュージックアプリで、並べた順に再生する
+    static func play(_ ids: [String]) async throws {
+        try await prepare()
+        let songs = try await songs(for: ids)
+        PreviewPlayer.shared.stop()
+        let player = SystemMusicPlayer.shared
+        player.queue = SystemMusicPlayer.Queue(for: songs)
+        try await player.play()
+    }
+
+    /// ライブラリにプレイリストとして保存する。同じ期間を前にも保存していたら、そのプレイリストの曲を入れ替える
+    static func save(_ ids: [String], name: String, description: String, key: String) async throws {
+        try await prepare()
+        let songs = try await songs(for: ids)
+        let storeKey = "playlist_\(key)"
+        if let saved = UserDefaults.standard.string(forKey: storeKey) {
+            var request = MusicLibraryRequest<Playlist>()
+            request.filter(matching: \.id, equalTo: MusicItemID(saved))
+            if let playlist = try? await request.response().items.first {
+                try await MusicLibrary.shared.edit(playlist, name: name, description: description, items: songs)
+                return
+            }
+        }
+        let playlist = try await MusicLibrary.shared.createPlaylist(
+            name: name, description: description, authorDisplayName: S("私と音楽", "Me & Music"), items: songs)
+        UserDefaults.standard.set(playlist.id.rawValue, forKey: storeKey)
+    }
+
+    /// ミュージックアプリを開く
+    static func openMusicApp() {
+        if let url = URL(string: "music://") { UIApplication.shared.open(url) }
+    }
+}

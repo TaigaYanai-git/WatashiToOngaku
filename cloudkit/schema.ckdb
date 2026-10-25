@@ -75,6 +75,21 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
+    // いいね（レコード名 = "l-<投稿した人の鍵>-<いいねした人のコード>"）。いいねした日付を並べる。
+    // 索引なし：days に索引があると、検索でレコード名（＝相手の鍵）を探し出せてしまう
+    RECORD TYPE Like (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        days            LIST<STRING>,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
     // 通報。開発者が CloudKit コンソールで確認する。ほかの利用者には見せない
     RECORD TYPE Report (
         "___createTime" TIMESTAMP,

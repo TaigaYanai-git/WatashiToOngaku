@@ -10,12 +10,16 @@ struct SettingsView: View {
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
     @AppStorage(AppIconManager.followsThemeKey) private var iconFollowsTheme = false
+    @ObservedObject private var plus = PlusStore.shared
+    @State private var showPlus = false
+    @State private var showManageSubscription = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     profileSection
+                    plusSection
                     themeSection
                     languageSection
                     settingsSection
@@ -28,6 +32,8 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
+            .sheet(isPresented: $showPlus) { PlusView() }
+            .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
         }
     }
@@ -45,7 +51,9 @@ struct SettingsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(ThemeStore.accents) { accent in
+                        let locked = !plus.isPlus && !PlusStore.freeAccents.contains(accent.id)
                         Button {
+                            guard !locked else { showPlus = true; return }
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 theme.accentIndex = accent.id
                             }
@@ -69,6 +77,10 @@ struct SettingsView: View {
                                         Image(systemName: "checkmark")
                                             .font(.caption2.weight(.bold))
                                             .foregroundColor(accent.needsBorder ? Color.dlText : .white)
+                                    } else if locked {
+                                        Image(systemName: "lock.fill")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white.opacity(0.9))
                                     }
                                 }
                                 .scaleEffect(theme.accentIndex == accent.id ? 1.12 : 1.0)
@@ -114,9 +126,14 @@ struct SettingsView: View {
                         .font(.body)
                         .foregroundColor(.dlPrimary)
                 }
-                Text(verbatim: S("ダークモード", "Dark Mode"))
-                    .font(.subheadline)
-                    .foregroundColor(.dlText)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: S("ダークモード", "Dark Mode"))
+                        .font(.subheadline)
+                        .foregroundColor(.dlText)
+                    Text(verbatim: S("アプリのアイコンも黒になります（iOS のお知らせが出ます）", "The app icon turns dark too (iOS shows a notice)"))
+                        .font(.caption2)
+                        .foregroundColor(.dlTextSub)
+                }
                 Spacer()
                 Toggle("", isOn: $theme.isDark)
                     .tint(.dlPrimary)
@@ -136,15 +153,19 @@ struct SettingsView: View {
                     Image(systemName: "app.badge").font(.body).foregroundColor(.dlPrimary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
-                        .font(.subheadline)
-                        .foregroundColor(.dlText)
+                    HStack(spacing: 4) {
+                        Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
+                        if !plus.isPlus { Image(systemName: "lock.fill").font(.caption2) }
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.dlText)
                     Text(verbatim: S("切り替えるたびに iOS のお知らせが出ます", "iOS shows a notice each time it changes"))
                         .font(.caption2)
                         .foregroundColor(.dlTextSub)
                 }
                 Spacer()
-                Toggle("", isOn: $iconFollowsTheme)
+                Toggle("", isOn: Binding(get: { iconFollowsTheme && plus.isPlus },
+                                         set: { if plus.isPlus { iconFollowsTheme = $0 } else { showPlus = true } }))
                     .tint(.dlPrimary)
                     .labelsHidden()
             }
@@ -154,15 +175,18 @@ struct SettingsView: View {
             .cornerRadius(16)
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-            .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply(accentIndex: theme.accentIndex) }
+            .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
             .onChange(of: theme.accentIndex) { _, index in AppIconManager.apply(accentIndex: index) }
+            .onChange(of: theme.isDark) { _, isDark in AppIconManager.apply(isDark: isDark) }
         }
     }
 
     private func bgPatternButton(pattern: BgPattern) -> some View {
         let selected = theme.bgPatternIndex == pattern.rawValue
         let label = theme.language == "en" ? pattern.labelEn : pattern.label
+        let locked = !plus.isPlus && !PlusStore.freePatterns.contains(pattern.rawValue)
         return Button {
+            guard !locked else { showPlus = true; return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 theme.bgPatternIndex = pattern.rawValue
             }
@@ -185,12 +209,49 @@ struct SettingsView: View {
                         )
                         .frame(width: 72, height: 48)
                 }
-                Text(label)
-                    .font(.caption.weight(selected ? .semibold : .regular))
-                    .foregroundColor(selected ? .dlPrimary : .dlTextSub)
+                HStack(spacing: 3) {
+                    if locked { Image(systemName: "lock.fill").font(.system(size: 9)) }
+                    Text(label)
+                }
+                .font(.caption.weight(selected ? .semibold : .regular))
+                .foregroundColor(selected ? .dlPrimary : .dlTextSub)
             }
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Plus
+
+    private var plusSection: some View {
+        Button {
+            if plus.isPlus { showManageSubscription = true } else { showPlus = true }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundColor(.white)
+                    .frame(width: 40, height: 40)
+                    .background(LinearGradient.dlPrimary)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: S("私と音楽 Plus", "Me & Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                    Text(verbatim: plus.isPlus
+                         ? S("ご利用ありがとうございます。タップで登録を管理", "Thanks for your support. Tap to manage")
+                         : S("月・年のプレイリスト、すべてのテーマカラーなど", "Monthly & yearly playlists, all theme colors and more"))
+                        .font(.caption)
+                        .foregroundColor(.dlTextSub)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundColor(.dlTextLight)
+            }
+            .padding(16)
+            .background(Color.dlCard)
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Language
@@ -274,6 +335,12 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
+            #if DEBUG
+            Toggle(S("開発用：Plus を有効にする", "Debug: Enable Plus"), isOn: $plus.debugOverride)
+                .font(.caption)
+                .tint(.dlPrimary)
+                .padding(.horizontal, 20)
+            #endif
             Text(verbatim: "\(S("バージョン", "Version")) \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")")
                 .font(.caption)
                 .foregroundColor(.dlTextLight)

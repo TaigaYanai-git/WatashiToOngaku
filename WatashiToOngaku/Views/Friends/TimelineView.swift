@@ -4,10 +4,12 @@ import SwiftUI
 struct TimelineView: View {
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var social = SocialStore.shared
+    @ObservedObject private var plus = PlusStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
     @State private var showProfile = false
     @State private var reporting: FriendPost?
+    @State private var playlistSpan: PlaylistSpan?
 
     var body: some View {
         NavigationStack {
@@ -43,6 +45,7 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
+            .sheet(item: $playlistSpan) { GroupPlaylistView(span: $0) }
             .sheet(isPresented: $showProfile) {
                 VStack(spacing: 20) {
                     Text(verbatim: S("プロフィール", "Profile")).font(.headline).foregroundColor(.dlText)
@@ -71,6 +74,7 @@ struct TimelineView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
+                playlistCard
                 if social.timeline.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
@@ -89,7 +93,7 @@ struct TimelineView: View {
                     .padding(.top, 60)
                 }
                 ForEach(social.timeline) { post in
-                    PostCard(post: post) { reporting = post }
+                    PostCard(post: post, likers: social.likes[SocialStore.likeKey(post)] ?? []) { reporting = post }
                 }
             }
             .padding(.horizontal, 20)
@@ -97,6 +101,34 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
+    }
+
+    /// 自分とフレンドが選んだ曲をまとめた、日・週・月・年のプレイリスト
+    private var playlistCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(S("みんなのプレイリスト", "Everyone's Playlist"), systemImage: "music.note.list")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            HStack(spacing: 8) {
+                ForEach(PlaylistSpan.allCases) { span in
+                    Button { playlistSpan = span } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: span.needsPlus && !plus.isPlus ? "lock.fill" : "play.circle.fill")
+                                .font(.title3)
+                            Text(verbatim: [S("今日", "Today"), S("今週", "Week"), S("今月", "Month"), S("今年", "Year")][PlaylistSpan.allCases.firstIndex(of: span)!])
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundColor(.dlPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.dlPrimaryBg)
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .dlCard()
     }
 
     private func message_(_ text: String) -> some View {
@@ -114,8 +146,10 @@ struct TimelineView: View {
 
 private struct PostCard: View {
     let post: FriendPost
+    let likers: [Friend]
     let onReport: () -> Void
     @Environment(\.openURL) private var openURL
+    @State private var showLikers = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -159,8 +193,62 @@ private struct PostCard: View {
                     .background(Color.dlCardTint)
                     .cornerRadius(12)
             }
+            likeRow
         }
         .dlCard()
+    }
+
+    private var likedByMe: Bool { likers.contains { $0.isMe } }
+
+    /// いいね：フレンドの投稿はハートで付け外し、数をタップすると誰がいいねしたか見られる
+    private var likeRow: some View {
+        HStack(spacing: 8) {
+            if post.friend.isMe {
+                Image(systemName: likers.isEmpty ? "heart" : "heart.fill")
+                    .foregroundColor(likers.isEmpty ? .dlTextLight : .pink)
+            } else {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await SocialStore.shared.toggleLike(post) }
+                } label: {
+                    Image(systemName: likedByMe ? "heart.fill" : "heart")
+                        .font(.title3)
+                        .foregroundColor(likedByMe ? .pink : .dlTextSub)
+                        .symbolEffect(.bounce, value: likedByMe)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(likedByMe ? S("いいねを取り消す", "Unlike") : S("いいね", "Like"))
+            }
+            if !likers.isEmpty {
+                Button { showLikers = true } label: {
+                    HStack(spacing: -6) {
+                        ForEach(likers.prefix(3)) { AvatarView(code: $0.code, version: $0.avatarVersion, nickname: $0.nickname, size: 20) }
+                    }
+                    Text(verbatim: S("\(likers.count)件のいいね", "\(likers.count) like\(likers.count == 1 ? "" : "s")"))
+                        .font(.caption)
+                        .foregroundColor(.dlTextSub)
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .sheet(isPresented: $showLikers) {
+            NavigationStack {
+                List(likers) { liker in
+                    HStack(spacing: 10) {
+                        AvatarView(code: liker.code, version: liker.avatarVersion, nickname: liker.nickname, size: 32)
+                        Text(verbatim: liker.isMe ? S("\(liker.nickname)（あなた）", "\(liker.nickname) (you)") : liker.nickname)
+                            .foregroundColor(.dlText)
+                    }
+                    .listRowBackground(Color.dlCard)
+                }
+                .scrollContentBackground(.hidden)
+                .background(DlBackground().ignoresSafeArea())
+                .navigationTitle(Text(verbatim: S("いいね", "Likes")))
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private var dayText: String {

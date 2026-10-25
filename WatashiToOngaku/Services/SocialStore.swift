@@ -181,9 +181,20 @@ final class SocialStore: ObservableObject {
         let id = postID(secret: secret, dayKey: entry.dayKey)
         guard entry.shareSong else {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: [id])
+            uploadedStamps[entry.dayKey] = Self.stamp(entry)
             return
         }
-        let record = (try? await publicDB.record(for: id)) ?? CKRecord(recordType: "Post", recordID: id)
+        do {
+            _ = try await save(postRecord(entry, id: id))
+            uploadedStamps[entry.dayKey] = Self.stamp(entry)
+        } catch {
+            lastError = Self.describe(error)
+        }
+    }
+
+    /// 投稿のレコードを作る（自分だけが書くので、サーバーの内容を読まずに丸ごと上書きする）
+    private func postRecord(_ entry: SongEntry, id: CKRecord.ID) -> CKRecord {
+        let record = CKRecord(recordType: "Post", recordID: id)
         record["dayKey"] = entry.dayKey
         record["songID"] = entry.songID
         record["title"] = entry.title
@@ -194,26 +205,50 @@ final class SocialStore: ObservableObject {
         record["appleMusicURL"] = entry.appleMusicURL
         record["memo"] = entry.shareMemo ? entry.memo : ""
         record["postedAt"] = entry.createdAt
-        do {
-            _ = try await save(record)
-        } catch {
-            lastError = Self.describe(error)
-        }
+        return record
     }
 
     func deletePost(dayKey: String) async {
         guard state == .ready else { return }
         _ = try? await publicDB.modifyRecords(saving: [], deleting: [postID(secret: secret, dayKey: dayKey)])
+        uploadedStamps[dayKey] = nil
     }
 
     private var localEntries: [SongEntry] {
         (try? AppContainer.shared.mainContext.fetch(FetchDescriptor<SongEntry>())) ?? []
     }
 
-    /// 最近の記録をまとめて置く（フレンドが見られるのはタイムラインの期間ぶん）
+    /// 日付 → 置いた内容の印。変わった記録だけを置き直すために使う（鍵を作り直したら空にする）
+    private var uploadedStamps: [String: String] {
+        get { local.dictionary(forKey: "social_uploaded_\(secret)") as? [String: String] ?? [:] }
+        set { local.set(newValue, forKey: "social_uploaded_\(secret)") }
+    }
+
+    private static func stamp(_ entry: SongEntry) -> String {
+        [entry.songID, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)"].joined(separator: "|")
+    }
+
+    /// すべての記録を置く（月・年のプレイリストでフレンドが過去の曲も聴けるように）。
+    /// 前回から変わった記録だけを、200件ずつまとめて保存する
     private func uploadAll() async {
-        let since = DayKey.string(from: Calendar.current.date(byAdding: .day, value: -Self.timelineDays, to: Date())!)
-        for entry in localEntries where entry.dayKey >= since { await upload(entry) }
+        var stamps = uploadedStamps
+        let changed = localEntries.filter { stamps[$0.dayKey] != Self.stamp($0) }
+        for chunk in changed.chunked(200) {
+            let saving = chunk.filter(\.shareSong).map { postRecord($0, id: postID(secret: secret, dayKey: $0.dayKey)) }
+            let deleting = chunk.filter { !$0.shareSong }.map { postID(secret: secret, dayKey: $0.dayKey) }
+            do {
+                let (saved, deleted) = try await publicDB.modifyRecords(saving: saving, deleting: deleting, savePolicy: .allKeys)
+                for entry in chunk {
+                    let id = postID(secret: secret, dayKey: entry.dayKey)
+                    let ok = entry.shareSong ? (try? saved[id]?.get()) != nil : deleted[id] != nil
+                    if ok { stamps[entry.dayKey] = Self.stamp(entry) }
+                }
+            } catch {
+                print("[Social] uploadAll failed: \(Self.describe(error))")
+                break
+            }
+        }
+        uploadedStamps = stamps
     }
 
     // MARK: - フレンドの追加
@@ -321,24 +356,133 @@ final class SocialStore: ObservableObject {
             AvatarStore.shared.fetchIfNeeded(code: code, version: version, in: publicDB)
         }
 
-        // 各フレンドの最近の投稿を、レコード名を指定して取り出す（検索はしない）
-        let calendar = Calendar.current
-        let days = (0..<Self.timelineDays).map {
-            DayKey.string(from: calendar.date(byAdding: .day, value: -$0, to: Date())!)
-        }
-        var posts: [FriendPost] = []
-        for friend in newFriends {
-            let ids = days.map { postID(secret: friend.secret, dayKey: $0) }
-            guard let results = try? await publicDB.records(for: ids) else { continue }
-            posts += results.values.compactMap { try? $0.get() }.map { FriendPost(record: $0, friend: friend) }
-        }
-
-        // 自分の投稿（フレンドに見えている内容）も並べる
-        let me = Friend(code: friendCode, nickname: nickname, secret: "", avatarVersion: avatarVersion, isMe: true)
-        posts += localEntries.filter { $0.shareSong && days.contains($0.dayKey) }.map { FriendPost(entry: $0, me: me) }
-
         friends = newFriends.sorted { $0.nickname < $1.nickname }
-        timeline = posts.sorted { $0.postedAt > $1.postedAt }
+        postCache = [:]
+
+        // 各フレンドの最近の投稿を、レコード名を指定して取り出す（検索はしない）
+        let today = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -(Self.timelineDays - 1), to: today)!
+        let days = Set(Self.dayKeys(from: start, to: today))
+        let posts = await posts(from: start, to: today, includeAllOfMine: false)
+        await refreshLikes()
+        timeline = posts.filter { days.contains($0.dayKey) }.sorted { $0.postedAt > $1.postedAt }
+    }
+
+    // MARK: - 期間の投稿（みんなのプレイリスト）
+
+    /// レコード名 → 投稿（無ければ nil）。タイムラインを更新するたびに空にする
+    private var postCache: [String: FriendPost?] = [:]
+
+    private var me: Friend {
+        Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true)
+    }
+
+    /// 期間内の、フレンドと自分の投稿。
+    /// includeAllOfMine なら自分の記録は共有していない日の曲も入れる（自分だけが見るプレイリスト用）
+    func posts(from start: Date, to end: Date, includeAllOfMine: Bool = true) async -> [FriendPost] {
+        let days = Self.dayKeys(from: start, to: min(end, Date()))
+        var result: [FriendPost] = []
+        if state == .ready {
+            for friend in friends {
+                let ids = days.map { postID(secret: friend.secret, dayKey: $0) }
+                let missing = ids.filter { postCache[$0.recordName] == nil }
+                for chunk in missing.chunked(200) {
+                    guard let found = try? await publicDB.records(for: chunk) else { continue }
+                    for id in chunk {
+                        postCache[id.recordName] = (try? found[id]?.get()).map { FriendPost(record: $0, friend: friend) }
+                    }
+                }
+                result += ids.compactMap { postCache[$0.recordName] ?? nil }
+            }
+        }
+        let keys = Set(days)
+        let mine = localEntries.filter { keys.contains($0.dayKey) && (includeAllOfMine || $0.shareSong) }
+        result += mine.map { FriendPost(entry: $0, me: me) }
+        return result
+    }
+
+    static func dayKeys(from start: Date, to end: Date) -> [String] {
+        let calendar = Calendar.current
+        var day = calendar.startOfDay(for: start)
+        var keys: [String] = []
+        while day <= end {
+            keys.append(DayKey.string(from: day))
+            day = calendar.date(byAdding: .day, value: 1, to: day)!
+        }
+        return keys
+    }
+
+    // MARK: - いいね
+
+    /// 投稿（"コード|日付"）→ いいねした人
+    @Published private(set) var likes: [String: [Friend]] = [:]
+    /// 自分がいいねした日：投稿した人の鍵 → 日付
+    private var myLikes: [String: Set<String>] = [:]
+
+    static func likeKey(_ post: FriendPost) -> String { "\(post.friend.code)|\(post.dayKey)" }
+
+    /// いいねは「いいねした人 × 投稿した人」ごとに1件のレコードに、いいねした日付を並べて置く。
+    /// レコード名 "l-<投稿した人の鍵>-<いいねした人のコード>"：鍵を知っているフレンドしか読めず、書くのは本人だけ
+    private static func likeID(ownerSecret: String, likerCode: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: "l-\(ownerSecret)-\(likerCode)")
+    }
+
+    /// 自分とフレンドの投稿についた、知っている人（自分とフレンド）からのいいねを読む
+    private func refreshLikes() async {
+        let people = friends + [me]
+        var ids: [CKRecord.ID] = []
+        var pairs: [CKRecord.ID: (owner: Friend, liker: Friend)] = [:]
+        for owner in people {
+            for liker in people where liker.code != owner.code {
+                let id = Self.likeID(ownerSecret: owner.secret, likerCode: liker.code)
+                ids.append(id)
+                pairs[id] = (owner, liker)
+            }
+        }
+        var newLikes: [String: [Friend]] = [:]
+        var mine: [String: Set<String>] = [:]
+        for chunk in ids.chunked(200) {
+            guard let found = try? await publicDB.records(for: chunk, desiredKeys: ["days"]) else { continue }
+            for case let (id, .success(record)) in found {
+                guard let pair = pairs[id] else { continue }
+                let days = record["days"] as? [String] ?? []
+                for day in days { newLikes["\(pair.owner.code)|\(day)", default: []].append(pair.liker) }
+                if pair.liker.isMe { mine[pair.owner.secret] = Set(days) }
+            }
+        }
+        likes = newLikes
+        myLikes = mine
+    }
+
+    func isLikedByMe(_ post: FriendPost) -> Bool {
+        likes[Self.likeKey(post)]?.contains { $0.isMe } ?? false
+    }
+
+    /// フレンドの投稿にいいねする／取り消す
+    func toggleLike(_ post: FriendPost) async {
+        guard state == .ready, !post.friend.isMe else { return }
+        let key = Self.likeKey(post)
+        var days = myLikes[post.friend.secret] ?? []
+        if days.contains(post.dayKey) {
+            days.remove(post.dayKey)
+            likes[key]?.removeAll { $0.isMe }
+        } else {
+            days.insert(post.dayKey)
+            likes[key, default: []].append(me)
+        }
+        myLikes[post.friend.secret] = days
+        await saveMyLikes(ownerSecret: post.friend.secret, days: days)
+    }
+
+    private func saveMyLikes(ownerSecret: String, days: Set<String>) async {
+        let record = CKRecord(recordType: "Like", recordID: Self.likeID(ownerSecret: ownerSecret, likerCode: friendCode))
+        // 古い日付から捨てて、1年ぶんだけ残す
+        record["days"] = Array(days.sorted().suffix(366))
+        do {
+            _ = try await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)
+        } catch {
+            lastError = Self.describe(error)
+        }
     }
 
     // MARK: - フレンド解除・ブロック・通報
@@ -363,9 +507,18 @@ final class SocialStore: ObservableObject {
         }
         do { try await publishFriendCode() } catch { lastError = Self.describe(error) }
         await uploadAll()
-        // 古い投稿と古いコードを消す
+        // 自分のいいねを新しいコードで置き直す（残っているフレンドの投稿へのものだけ）
+        let remaining = Set(friends.map(\.secret))
+        for (ownerSecret, days) in myLikes where remaining.contains(ownerSecret) {
+            await saveMyLikes(ownerSecret: ownerSecret, days: days)
+        }
+        // 古い投稿・古いコード・古いいいねを消す
         let oldIDs = localEntries.map { postID(secret: oldSecret, dayKey: $0.dayKey) } + [CKRecord.ID(recordName: oldCode)]
-        _ = try? await publicDB.modifyRecords(saving: [], deleting: oldIDs)
+            + myLikes.keys.map { Self.likeID(ownerSecret: $0, likerCode: oldCode) }
+        for chunk in oldIDs.chunked(200) {
+            _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
+        }
+        local.removeObject(forKey: "social_uploaded_\(oldSecret)")
         // 残っているフレンドに新しいコードを届ける
         for code in friendCodes { await sendFriendRequest(to: code, previousCode: oldCode) }
         await refresh()
@@ -456,4 +609,11 @@ struct FriendPost: Identifiable {
     }
 
     var day: Date? { DayKey.date(from: dayKey) }
+}
+
+extension Array {
+    /// size 件ずつに分ける（CloudKit に一度に渡す件数を抑えるため）
+    func chunked(_ size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map { Array(self[$0..<Swift.min($0 + size, count)]) }
+    }
 }

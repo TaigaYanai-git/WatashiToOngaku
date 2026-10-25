@@ -76,7 +76,11 @@ private struct AppRootView: View {
         .environmentObject(theme)
         .environmentObject(router)
         .task {
-            if !ProcessInfo.processInfo.arguments.contains("-uiPreview") { await SocialStore.shared.start() }
+            await PlusStore.shared.refresh()
+            guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
+            // アプリ内のダークモード・テーマカラーとホーム画面のアイコンがずれていたら合わせる
+            AppIconManager.apply()
+            await SocialStore.shared.start()
         }
         // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンドに追加する
         .onOpenURL { url in

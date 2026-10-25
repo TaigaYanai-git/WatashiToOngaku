@@ -8,6 +8,8 @@ struct ReviewView: View {
     @Query(sort: \SongEntry.dayKey, order: .reverse) private var entries: [SongEntry]
     @State private var span: Span = .month
     @State private var anchor = Date()
+    @State private var showShare = false
+    @ObservedObject private var plus = PlusStore.shared
 
     enum Span: String, CaseIterable, Identifiable {
         case month, year
@@ -50,6 +52,7 @@ struct ReviewView: View {
                         .dlCard(padding: 32)
                     } else {
                         summary
+                        playlistCard
                         topArtists
                         songList
                     }
@@ -61,6 +64,35 @@ struct ReviewView: View {
             .navigationTitle(Text(verbatim: S("ふりかえり", "Look Back")))
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showShare = true } label: { Image(systemName: "square.and.arrow.up") }
+                        .foregroundColor(.dlPrimary)
+                        .disabled(periodEntries.isEmpty)
+                        .accessibilityLabel(S("シェア画像を作る", "Create Share Image"))
+                }
+            }
+            .sheet(isPresented: $showShare) { ShareCardSheet(title: periodTitle, entries: periodEntries) }
+        }
+    }
+
+    /// この月・年に選んだ曲を Apple Music で聴く（年は Plus）
+    @ViewBuilder
+    private var playlistCard: some View {
+        if span == .year && !plus.isPlus {
+            PlusLockedCard(title: S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます",
+                                    "Listen to a whole year of your songs as an Apple Music playlist"))
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(S("\(periodTitle)のプレイリスト", "\(periodTitle) Playlist"), systemImage: "music.note.list")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.dlTextSub)
+                PlaylistActions(songIDs: periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID),
+                                name: S("私と音楽 \(periodTitle)", "Me & Music \(periodTitle)"),
+                                description: S("私と音楽で選んだ、\(periodTitle)の今日の一曲", "My songs of the day in \(periodTitle), from Me & Music"),
+                                key: "mine-\(prefix)")
+            }
+            .dlCard()
         }
     }
 
