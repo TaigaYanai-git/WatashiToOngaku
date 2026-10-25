@@ -2,7 +2,7 @@ import Combine
 import StoreKit
 
 /// 「私と音楽 Plus」（自動更新サブスクリプション）の購入状態。
-/// 毎日の記録・フレンド・いいね・今日と今週のプレイリストは無料のまま。
+/// 毎日の記録・フレンド・今日と今週のプレイリストは無料のまま。
 /// Plus では、月・年のプレイリスト、すべてのテーマカラーと背景、テーマカラーのアイコンが使える。
 @MainActor
 final class PlusStore: ObservableObject {

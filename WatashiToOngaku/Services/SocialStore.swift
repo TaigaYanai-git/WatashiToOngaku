@@ -364,7 +364,6 @@ final class SocialStore: ObservableObject {
         let start = Calendar.current.date(byAdding: .day, value: -(Self.timelineDays - 1), to: today)!
         let days = Set(Self.dayKeys(from: start, to: today))
         let posts = await posts(from: start, to: today, includeAllOfMine: false)
-        await refreshLikes()
         timeline = posts.filter { days.contains($0.dayKey) }.sorted { $0.postedAt > $1.postedAt }
     }
 
@@ -412,79 +411,6 @@ final class SocialStore: ObservableObject {
         return keys
     }
 
-    // MARK: - いいね
-
-    /// 投稿（"コード|日付"）→ いいねした人
-    @Published private(set) var likes: [String: [Friend]] = [:]
-    /// 自分がいいねした日：投稿した人の鍵 → 日付
-    private var myLikes: [String: Set<String>] = [:]
-
-    static func likeKey(_ post: FriendPost) -> String { "\(post.friend.code)|\(post.dayKey)" }
-
-    /// いいねは「いいねした人 × 投稿した人」ごとに1件のレコードに、いいねした日付を並べて置く。
-    /// レコード名 "l-<投稿した人の鍵>-<いいねした人のコード>"：鍵を知っているフレンドしか読めず、書くのは本人だけ
-    private static func likeID(ownerSecret: String, likerCode: String) -> CKRecord.ID {
-        CKRecord.ID(recordName: "l-\(ownerSecret)-\(likerCode)")
-    }
-
-    /// 自分とフレンドの投稿についた、知っている人（自分とフレンド）からのいいねを読む
-    private func refreshLikes() async {
-        let people = friends + [me]
-        var ids: [CKRecord.ID] = []
-        var pairs: [CKRecord.ID: (owner: Friend, liker: Friend)] = [:]
-        for owner in people {
-            for liker in people where liker.code != owner.code {
-                let id = Self.likeID(ownerSecret: owner.secret, likerCode: liker.code)
-                ids.append(id)
-                pairs[id] = (owner, liker)
-            }
-        }
-        var newLikes: [String: [Friend]] = [:]
-        var mine: [String: Set<String>] = [:]
-        for chunk in ids.chunked(200) {
-            guard let found = try? await publicDB.records(for: chunk, desiredKeys: ["days"]) else { continue }
-            for case let (id, .success(record)) in found {
-                guard let pair = pairs[id] else { continue }
-                let days = record["days"] as? [String] ?? []
-                for day in days { newLikes["\(pair.owner.code)|\(day)", default: []].append(pair.liker) }
-                if pair.liker.isMe { mine[pair.owner.secret] = Set(days) }
-            }
-        }
-        likes = newLikes
-        myLikes = mine
-    }
-
-    func isLikedByMe(_ post: FriendPost) -> Bool {
-        likes[Self.likeKey(post)]?.contains { $0.isMe } ?? false
-    }
-
-    /// フレンドの投稿にいいねする／取り消す
-    func toggleLike(_ post: FriendPost) async {
-        guard state == .ready, !post.friend.isMe else { return }
-        let key = Self.likeKey(post)
-        var days = myLikes[post.friend.secret] ?? []
-        if days.contains(post.dayKey) {
-            days.remove(post.dayKey)
-            likes[key]?.removeAll { $0.isMe }
-        } else {
-            days.insert(post.dayKey)
-            likes[key, default: []].append(me)
-        }
-        myLikes[post.friend.secret] = days
-        await saveMyLikes(ownerSecret: post.friend.secret, days: days)
-    }
-
-    private func saveMyLikes(ownerSecret: String, days: Set<String>) async {
-        let record = CKRecord(recordType: "Like", recordID: Self.likeID(ownerSecret: ownerSecret, likerCode: friendCode))
-        // 古い日付から捨てて、1年ぶんだけ残す
-        record["days"] = Array(days.sorted().suffix(366))
-        do {
-            _ = try await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)
-        } catch {
-            lastError = Self.describe(error)
-        }
-    }
-
     // MARK: - フレンド解除・ブロック・通報
 
     /// フレンドをやめる。自分の鍵とコードを作り直して、相手が読めないようにする
@@ -507,14 +433,8 @@ final class SocialStore: ObservableObject {
         }
         do { try await publishFriendCode() } catch { lastError = Self.describe(error) }
         await uploadAll()
-        // 自分のいいねを新しいコードで置き直す（残っているフレンドの投稿へのものだけ）
-        let remaining = Set(friends.map(\.secret))
-        for (ownerSecret, days) in myLikes where remaining.contains(ownerSecret) {
-            await saveMyLikes(ownerSecret: ownerSecret, days: days)
-        }
-        // 古い投稿・古いコード・古いいいねを消す
+        // 古い投稿と古いコードを消す
         let oldIDs = localEntries.map { postID(secret: oldSecret, dayKey: $0.dayKey) } + [CKRecord.ID(recordName: oldCode)]
-            + myLikes.keys.map { Self.likeID(ownerSecret: $0, likerCode: oldCode) }
         for chunk in oldIDs.chunked(200) {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
         }

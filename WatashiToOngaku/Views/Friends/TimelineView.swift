@@ -93,7 +93,7 @@ struct TimelineView: View {
                     .padding(.top, 60)
                 }
                 ForEach(social.timeline) { post in
-                    PostCard(post: post, likers: social.likes[SocialStore.likeKey(post)] ?? []) { reporting = post }
+                    PostCard(post: post) { reporting = post }
                 }
             }
             .padding(.horizontal, 20)
@@ -146,10 +146,8 @@ struct TimelineView: View {
 
 private struct PostCard: View {
     let post: FriendPost
-    let likers: [Friend]
     let onReport: () -> Void
     @Environment(\.openURL) private var openURL
-    @State private var showLikers = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -193,62 +191,8 @@ private struct PostCard: View {
                     .background(Color.dlCardTint)
                     .cornerRadius(12)
             }
-            likeRow
         }
         .dlCard()
-    }
-
-    private var likedByMe: Bool { likers.contains { $0.isMe } }
-
-    /// いいね：フレンドの投稿はハートで付け外し、数をタップすると誰がいいねしたか見られる
-    private var likeRow: some View {
-        HStack(spacing: 8) {
-            if post.friend.isMe {
-                Image(systemName: likers.isEmpty ? "heart" : "heart.fill")
-                    .foregroundColor(likers.isEmpty ? .dlTextLight : .pink)
-            } else {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    Task { await SocialStore.shared.toggleLike(post) }
-                } label: {
-                    Image(systemName: likedByMe ? "heart.fill" : "heart")
-                        .font(.title3)
-                        .foregroundColor(likedByMe ? .pink : .dlTextSub)
-                        .symbolEffect(.bounce, value: likedByMe)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(likedByMe ? S("いいねを取り消す", "Unlike") : S("いいね", "Like"))
-            }
-            if !likers.isEmpty {
-                Button { showLikers = true } label: {
-                    HStack(spacing: -6) {
-                        ForEach(likers.prefix(3)) { AvatarView(code: $0.code, version: $0.avatarVersion, nickname: $0.nickname, size: 20) }
-                    }
-                    Text(verbatim: S("\(likers.count)件のいいね", "\(likers.count) like\(likers.count == 1 ? "" : "s")"))
-                        .font(.caption)
-                        .foregroundColor(.dlTextSub)
-                }
-                .buttonStyle(.plain)
-            }
-            Spacer()
-        }
-        .sheet(isPresented: $showLikers) {
-            NavigationStack {
-                List(likers) { liker in
-                    HStack(spacing: 10) {
-                        AvatarView(code: liker.code, version: liker.avatarVersion, nickname: liker.nickname, size: 32)
-                        Text(verbatim: liker.isMe ? S("\(liker.nickname)（あなた）", "\(liker.nickname) (you)") : liker.nickname)
-                            .foregroundColor(.dlText)
-                    }
-                    .listRowBackground(Color.dlCard)
-                }
-                .scrollContentBackground(.hidden)
-                .background(DlBackground().ignoresSafeArea())
-                .navigationTitle(Text(verbatim: S("いいね", "Likes")))
-                .navigationBarTitleDisplayMode(.inline)
-            }
-            .presentationDetents([.medium])
-        }
     }
 
     private var dayText: String {
