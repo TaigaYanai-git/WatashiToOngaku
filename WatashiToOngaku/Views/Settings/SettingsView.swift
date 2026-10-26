@@ -37,7 +37,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
-            .sheet(isPresented: $showColorPicker) {
+            .sheet(isPresented: $showColorPicker, onDismiss: { AppIconManager.apply() }) {
                 ColorPickerSheet(color: theme.customColor) { color in
                     theme.customColorHex = color.hexString
                     theme.accentIndex = ThemeStore.customIndex
@@ -179,7 +179,10 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
-            .onChange(of: theme.accentIndex) { _, index in AppIconManager.apply(accentIndex: index) }
+            // カスタムカラーは色を選び終えて画面を閉じたときに合わせる（選んでいる途中で何度も切り替えない）
+            .onChange(of: theme.accentIndex) { _, index in
+                if index != ThemeStore.customIndex { AppIconManager.apply(accentIndex: index) }
+            }
             .onChange(of: theme.isDark) { _, isDark in AppIconManager.apply(isDark: isDark) }
         }
     }

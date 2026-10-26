@@ -14,11 +14,30 @@ enum AppIconManager {
     static var followsTheme: Bool { UserDefaults.standard.bool(forKey: followsThemeKey) }
 
     static func iconName(accentIndex: Int, isDark: Bool) -> String? {
-        // カスタムカラーのアイコンは用意できないので、標準のアイコンにする
-        let theme = followsTheme && themes.indices.contains(accentIndex) ? themes[accentIndex] : ""
+        // カスタムカラーのアイコンは作れない（アイコンはアプリに入れておいたものしか使えない）ので、いちばん近い色のアイコンにする
+        let index = accentIndex == ThemeStore.customIndex ? nearestAccent(to: ThemeStore.shared.customColor) : accentIndex
+        let theme = followsTheme && themes.indices.contains(index) ? themes[index] : ""
         let base = theme.isEmpty ? "AppIcon" : "AppIcon-\(theme)"
         if isDark { return base + "-Dark" }
         return theme.isEmpty ? nil : base
+    }
+
+    /// いちばん近いテーマカラー。鮮やかな色は色合い（色相）がいちばん近い色、くすんだ色や暗い色はブラックかホワイト
+    static func nearestAccent(to color: UIColor) -> Int {
+        func hsb(_ color: UIColor) -> (h: CGFloat, s: CGFloat, b: CGFloat) {
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0
+            color.getHue(&h, saturation: &s, brightness: &b, alpha: nil)
+            return (h, s, b)
+        }
+        let target = hsb(color)
+        if target.s < 0.2 || target.b < 0.3 { return target.b < 0.55 ? 0 : 1 }
+        // ブラック（0）・ホワイト（1）以外の、色のあるテーマから選ぶ
+        let colorful = Array(2..<ThemeStore.accents.count)
+        let distances = colorful.map { index -> CGFloat in
+            let diff = abs(hsb(UIColor(ThemeStore.accents[index].primary)).h - target.h)
+            return min(diff, 1 - diff)
+        }
+        return distances.indices.min { distances[$0] < distances[$1] }.map { colorful[$0] } ?? 0
     }
 
     static func apply(accentIndex: Int = ThemeStore.shared.accentIndex, isDark: Bool = ThemeStore.shared.isDark) {
