@@ -125,6 +125,12 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
+        // タイムラインの曲が流れている（一時停止中も）あいだは、下に操作バーを出す
+        .safeAreaInset(edge: .bottom) {
+            if let post = currentPost {
+                playerBar(post).padding(.horizontal, 20).padding(.bottom, 8)
+            }
+        }
         .onChange(of: nowPlaying?.title) { _, _ in
             guard followsPlayback, let post = weekPosts.first(where: isNowPlaying) else { return }
             withAnimation { proxy.scrollTo(post.id, anchor: .center) }
@@ -132,17 +138,70 @@ struct TimelineView: View {
         }
     }
 
-    /// ミュージックで流れている曲（タイムラインの再生ボタンで流したものを、アプリ内でも分かるようにする）
-    private var nowPlaying: (id: String?, title: String, artist: String?)? {
-        guard musicState.playbackStatus == .playing, let entry = musicQueue.currentEntry else { return nil }
+    /// ミュージックの今の曲（一時停止中も含む）
+    private var currentSong: (id: String?, title: String, artist: String?)? {
+        guard [.playing, .paused].contains(musicState.playbackStatus), let entry = musicQueue.currentEntry else { return nil }
         if case .song(let song)? = entry.item { return (song.id.rawValue, song.title, song.artistName) }
         return (nil, entry.title, entry.subtitle)
     }
 
-    private func isNowPlaying(_ post: FriendPost) -> Bool {
-        guard let nowPlaying else { return false }
-        if let id = nowPlaying.id { return id == post.songID }
-        return nowPlaying.title == post.title && nowPlaying.artist == post.artist
+    /// ミュージックで流れている曲（タイムラインの再生ボタンで流したものを、アプリ内でも分かるようにする）
+    private var nowPlaying: (id: String?, title: String, artist: String?)? {
+        musicState.playbackStatus == .playing ? currentSong : nil
+    }
+
+    private func matches(_ post: FriendPost, _ song: (id: String?, title: String, artist: String?)?) -> Bool {
+        guard let song else { return false }
+        if let id = song.id { return id == post.songID }
+        return song.title == post.title && song.artist == post.artist
+    }
+
+    private func isNowPlaying(_ post: FriendPost) -> Bool { matches(post, nowPlaying) }
+
+    /// 今の曲がタイムラインにあれば、その投稿
+    private var currentPost: FriendPost? {
+        guard let song = currentSong else { return nil }
+        return social.timeline.first { matches($0, song) }
+    }
+
+    /// 前の曲・再生／一時停止・次の曲
+    private func playerBar(_ post: FriendPost) -> some View {
+        let isPlaying = musicState.playbackStatus == .playing
+        return HStack(spacing: 12) {
+            ArtworkView(url: post.artworkURL, cornerRadius: 8).frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(post.title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
+                Text(verbatim: "\(post.artist) ・ \(post.friend.nickname)").font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            playerControl("backward.fill", label: S("前の曲", "Previous")) {
+                try await SystemMusicPlayer.shared.skipToPreviousEntry()
+            }
+            playerControl(isPlaying ? "pause.fill" : "play.fill", label: isPlaying ? S("一時停止", "Pause") : S("再生", "Play")) {
+                if isPlaying { SystemMusicPlayer.shared.pause() } else { try await SystemMusicPlayer.shared.play() }
+            }
+            .font(.title2)
+            playerControl("forward.fill", label: S("次の曲", "Next")) {
+                try await SystemMusicPlayer.shared.skipToNextEntry()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.dlCard)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 4)
+    }
+
+    private func playerControl(_ symbol: String, label: String, action: @escaping () async throws -> Void) -> some View {
+        Button {
+            followsPlayback = true
+            Task { try? await action() }
+        } label: {
+            Image(systemName: symbol).frame(width: 36, height: 36)
+        }
+        .font(.title3)
+        .foregroundColor(.dlPrimary)
+        .accessibilityLabel(label)
     }
 
     /// 今日を含めた1週間（7日）の投稿。タイムラインと同じ並び
