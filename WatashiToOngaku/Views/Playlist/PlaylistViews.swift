@@ -1,36 +1,45 @@
 import MusicKit
 import SwiftUI
 
-/// 「Apple Musicで再生」「ライブラリに保存」のボタン
+/// 「上から再生」「シャッフル」「ライブラリに保存」のボタン（Apple Music の契約が必要）
 struct PlaylistActions: View {
-    /// 曲のカタログ ID（再生する順）
+    /// 曲のカタログ ID（一覧に並んでいる順。「上から再生」はこの順に流す）
     let songIDs: [String]
+    /// ライブラリに保存するときの順（nil なら songIDs の順）
+    var saveSongIDs: [String]?
     let name: String
     let description: String
     /// 同じ期間のプレイリストを作り直さず、入れ替えるための名前
     let key: String
+    /// 流し始めたとき（流れている曲を追いかけてスクロールし始める、など）
+    var onPlay: () -> Void = {}
 
     @State private var working: String?
     @State private var message: String?
     @State private var showOffer = false
     @State private var savedName: String?
-    @AppStorage("playlist_shuffle") private var shuffle = false
 
     var body: some View {
         VStack(spacing: 10) {
-            Picker("", selection: $shuffle) {
-                Label(S("順番に再生", "In Order"), systemImage: "list.number").tag(false)
-                Label(S("シャッフル", "Shuffle"), systemImage: "shuffle").tag(true)
-            }
-            .pickerStyle(.segmented)
             HStack(spacing: 10) {
-                button(shuffle ? "shuffle" : "play.fill", S("Apple Musicで再生", "Play in Apple Music"), id: "play") {
-                    try await AppleMusicService.play(songIDs, shuffle: shuffle)
+                button(id: "order", title: S("上から再生", "Play"), primary: true) {
+                    PlayFromTopIcon()
+                } action: {
+                    try await AppleMusicService.play(songIDs)
+                    onPlay()
                 }
-                button("plus.square.on.square", S("ライブラリに保存", "Save to Library"), id: "save") {
-                    try await AppleMusicService.save(songIDs, name: name, description: description, key: key)
-                    savedName = name
+                button(id: "shuffle", title: S("シャッフル", "Shuffle")) {
+                    Image(systemName: "shuffle")
+                } action: {
+                    try await AppleMusicService.play(songIDs, shuffle: true)
+                    onPlay()
                 }
+            }
+            button(id: "save", title: S("ライブラリに保存", "Save to Library")) {
+                Image(systemName: "plus.square.on.square")
+            } action: {
+                try await AppleMusicService.save(saveSongIDs ?? songIDs, name: name, description: description, key: key)
+                savedName = name
             }
             if let savedName {
                 Button {
@@ -50,7 +59,8 @@ struct PlaylistActions: View {
         .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
     }
 
-    private func button(_ symbol: String, _ title: String, id: String, action: @escaping () async throws -> Void) -> some View {
+    private func button<Icon: View>(id: String, title: String, primary: Bool = false, @ViewBuilder icon: () -> Icon,
+                                    action: @escaping () async throws -> Void) -> some View {
         Button {
             working = id
             Task {
@@ -65,16 +75,26 @@ struct PlaylistActions: View {
             }
         } label: {
             HStack(spacing: 6) {
-                if working == id { ProgressView().tint(.white) } else { Image(systemName: symbol) }
+                if working == id { ProgressView().tint(primary ? .white : .dlPrimary) } else { icon() }
                 Text(verbatim: title).lineLimit(1).minimumScaleFactor(0.8)
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundColor(id == "play" ? .white : .dlPrimary)
+            .foregroundColor(primary ? .white : .dlPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(id == "play" ? AnyShapeStyle(LinearGradient.dlPrimary) : AnyShapeStyle(Color.dlPrimaryBg))
+            .background(primary ? AnyShapeStyle(LinearGradient.dlPrimary) : AnyShapeStyle(Color.dlPrimaryBg))
             .cornerRadius(14)
         }
         .disabled(working != nil)
+    }
+}
+
+/// 「上から再生」のアイコン：上向きの矢印の横に再生マーク
+struct PlayFromTopIcon: View {
+    var body: some View {
+        HStack(spacing: 1) {
+            Image(systemName: "arrow.up").imageScale(.small).fontWeight(.bold)
+            Image(systemName: "play.fill")
+        }
     }
 }

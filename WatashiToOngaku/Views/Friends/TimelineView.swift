@@ -44,7 +44,7 @@ struct TimelineView: View {
                     }
                     // みんなが投稿した1週間分の曲を、タイムラインの上から順に／シャッフルで Apple Music で聴く
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        playButton("play.fill", id: "order", label: S("1週間分を上から再生", "Play This Week in Order"))
+                        playButton("order", id: "order", label: S("1週間分を上から再生", "Play This Week in Order"))
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         playButton("shuffle", id: "shuffle", label: S("1週間分をシャッフル再生", "Shuffle This Week"))
@@ -180,7 +180,13 @@ struct TimelineView: View {
                 }
             }
         } label: {
-            if playing == id { ProgressView().tint(.dlPrimary) } else { Image(systemName: symbol) }
+            if playing == id {
+                ProgressView().tint(.dlPrimary)
+            } else if id == "order" {
+                PlayFromTopIcon()
+            } else {
+                Image(systemName: symbol)
+            }
         }
         .foregroundColor(.dlPrimary)
         .disabled(weekPosts.isEmpty || playing != nil)

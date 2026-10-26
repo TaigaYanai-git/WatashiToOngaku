@@ -1,3 +1,4 @@
+import MusicKit
 import SwiftData
 import SwiftUI
 
@@ -11,6 +12,10 @@ struct CustomPlaylistView: View {
     @State private var start = Calendar.current.date(byAdding: .day, value: -13, to: Date())!
     @State private var end = Date()
     @State private var showPlus = false
+    /// 再生ボタンで流し始めたら、流れている曲までスクロールして追いかける
+    @State private var followsPlayback = false
+    @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
+    @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
     private let calendar = Calendar.current
 
@@ -39,6 +44,7 @@ struct CustomPlaylistView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -76,9 +82,11 @@ struct CustomPlaylistView: View {
                         PlaylistActions(songIDs: periodEntries.map(\.songID),
                                         name: "Our Music \(title)",
                                         description: S("Our Music で選んだ、\(title)の今日の一曲", "My songs of the day, \(title), from Our Music"),
-                                        key: "custom-\(keys.start)-\(keys.end)")
+                                        key: "custom-\(keys.start)-\(keys.end)") { followsPlayback = true }
+                            .id("\(keys.start)-\(keys.end)")
                         VStack(spacing: 12) {
                             ForEach(periodEntries) { entry in
+                                let playing = isNowPlaying(entry)
                                 HStack(spacing: 12) {
                                     PlayableArtwork(id: entry.songID, artworkURL: entry.artworkURL, previewURL: entry.previewURL,
                                                     size: 48, cornerRadius: 8, songID: entry.songID, clipStart: entry.clipStart)
@@ -87,10 +95,19 @@ struct CustomPlaylistView: View {
                                         Text(entry.artist).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
                                     }
                                     Spacer()
-                                    Text(entry.day, format: .dateTime.month(.defaultDigits).day())
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundColor(.dlTextSub)
+                                    if playing {
+                                        NowPlayingBadge()
+                                    } else {
+                                        Text(entry.day, format: .dateTime.month(.defaultDigits).day())
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundColor(.dlTextSub)
+                                    }
                                 }
+                                .padding(6)
+                                .background(playing ? Color.dlPrimaryBg : Color.clear)
+                                .cornerRadius(12)
+                                .padding(-6)
+                                .id(entry.dayKey)
                             }
                         }
                         .dlCard()
@@ -98,6 +115,19 @@ struct CustomPlaylistView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
+            }
+            // 選んだ曲が流れている（一時停止中も）あいだは、下に操作バーを出す
+            .safeAreaInset(edge: .bottom) {
+                if let entry = currentEntry, let song = currentSong {
+                    NowPlayingBar(artworkURL: entry.artworkURL, title: entry.title,
+                                  subtitle: "\(entry.artist) ・ \(entry.day.formatted(.dateTime.month(.defaultDigits).day()))",
+                                  isPlaying: song.isPlaying) { followsPlayback = true }
+                }
+            }
+            .onChange(of: currentSong) { _, _ in
+                guard followsPlayback, let entry = periodEntries.first(where: isNowPlaying) else { return }
+                withAnimation { proxy.scrollTo(entry.dayKey, anchor: .center) }
+            }
             }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: S("カスタムプレイリスト", "Custom Playlist")))
@@ -111,5 +141,23 @@ struct CustomPlaylistView: View {
             .sheet(isPresented: $showPlus) { PlusView() }
             .onDisappear { PreviewPlayer.shared.stop() }
         }
+    }
+
+    /// ミュージックの今の曲（一時停止中も含む）
+    private var currentSong: NowPlayingSong? { NowPlayingSong.current(queue: musicQueue, state: musicState) }
+
+    private func matches(_ entry: SongEntry, _ song: NowPlayingSong?) -> Bool {
+        song?.matches(songID: entry.songID, title: entry.title, artist: entry.artist) ?? false
+    }
+
+    private func isNowPlaying(_ entry: SongEntry) -> Bool {
+        guard let song = currentSong, song.isPlaying else { return false }
+        return matches(entry, song)
+    }
+
+    /// 今の曲が選んだ期間にあれば、その記録
+    private var currentEntry: SongEntry? {
+        guard let song = currentSong else { return nil }
+        return periodEntries.first { matches($0, song) }
     }
 }
