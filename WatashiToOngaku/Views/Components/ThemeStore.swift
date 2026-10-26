@@ -57,10 +57,6 @@ final class ThemeStore: ObservableObject {
     @Published var isDark: Bool {
         didSet { UserDefaults.standard.set(isDark, forKey: "dl_themeIsDark") }
     }
-    /// カスタムカラー（Plus）。accentIndex が customIndex のときに使う
-    @Published var customColorHex: String {
-        didSet { UserDefaults.standard.set(customColorHex, forKey: "dl_customColor") }
-    }
     @Published var bgPatternIndex: Int {
         didSet { UserDefaults.standard.set(bgPatternIndex, forKey: "dl_bgPattern") }
     }
@@ -115,23 +111,18 @@ final class ThemeStore: ObservableObject {
                     primaryBg:  Color(red: 0.929, green: 0.882, blue: 0.984)),
     ]
 
-    /// accentIndex がこの値なら、カスタムカラー
-    static var customIndex: Int { accents.count }
-    var isCustom: Bool { accentIndex == Self.customIndex }
-
-    var customColor: UIColor { UIColor(hex: customColorHex) ?? UIColor(red: 0.2, green: 0.6, blue: 0.6, alpha: 1) }
-
-    var primary:    Color { isCustom ? Color(customColor) : Self.accents[accentIndex].primary }
-    var primaryEnd: Color { isCustom ? Color(customColor.mixed(with: .white, 0.35)) : Self.accents[accentIndex].primaryEnd }
-    var primaryBg:  Color { isCustom ? Color(customColor.mixed(with: .white, 0.86)) : Self.accents[accentIndex].primaryBg }
+    var primary:    Color { Self.accents[accentIndex].primary }
+    var primaryEnd: Color { Self.accents[accentIndex].primaryEnd }
+    var primaryBg:  Color { Self.accents[accentIndex].primaryBg }
 
     var bgPattern: BgPattern { BgPattern(rawValue: bgPatternIndex) ?? .none }
 
     private init() {
         let ud = UserDefaults.standard
         // Default: ブラック (index 0); existing saved value respected
-        accentIndex = min(ud.integer(forKey: "dl_themeAccent"), Self.customIndex)
-        customColorHex = ud.string(forKey: "dl_customColor") ?? "#33999A"
+        // 以前のカスタムカラー（9 以上）を選んでいた人はブラックに戻す
+        let savedAccent = ud.integer(forKey: "dl_themeAccent")
+        accentIndex = Self.accents.indices.contains(savedAccent) ? savedAccent : 0
         isDark = ud.bool(forKey: "dl_themeIsDark")
         // Default: 水玉 (1) for first launch; 0 only when explicitly saved
         bgPatternIndex = ud.object(forKey: "dl_bgPattern") != nil
@@ -144,32 +135,5 @@ final class ThemeStore: ObservableObject {
             language = sys.hasPrefix("en") ? "en" : "ja"
         }
         UserDefaults.standard.set([language], forKey: "AppleLanguages")
-    }
-}
-
-extension UIColor {
-    /// "#RRGGBB"
-    convenience init?(hex: String) {
-        let text = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
-        guard text.count == 6, let value = UInt32(text, radix: 16) else { return nil }
-        self.init(red: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
-                  blue: CGFloat(value & 0xFF) / 255, alpha: 1)
-    }
-
-    var hexString: String {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
-        let clamp = { (v: CGFloat) in Int((min(max(v, 0), 1) * 255).rounded()) }
-        return String(format: "#%02X%02X%02X", clamp(r), clamp(g), clamp(b))
-    }
-
-    /// other を amount（0〜1）の割合で混ぜた色
-    func mixed(with other: UIColor, _ amount: CGFloat) -> UIColor {
-        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
-        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
-        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
-        other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
-        return UIColor(red: r1 + (r2 - r1) * amount, green: g1 + (g2 - g1) * amount,
-                       blue: b1 + (b2 - b1) * amount, alpha: 1)
     }
 }

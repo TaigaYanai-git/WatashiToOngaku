@@ -14,7 +14,6 @@ struct SettingsView: View {
     @State private var showPlus = false
     @State private var showManageSubscription = false
     @State private var showBlocked = false
-    @State private var showColorPicker = false
 
     var body: some View {
         NavigationStack {
@@ -37,14 +36,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
-            .sheet(isPresented: $showColorPicker, onDismiss: { AppIconManager.apply() }) {
-                ColorPickerSheet(color: theme.customColor) { color in
-                    theme.customColorHex = color.hexString
-                    theme.accentIndex = ThemeStore.customIndex
-                }
-                .ignoresSafeArea()
-                .presentationDetents([.medium, .large])
-            }
             .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
         }
@@ -99,7 +90,6 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    customColorButton
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
@@ -179,38 +169,8 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
-            // カスタムカラーは色を選び終えて画面を閉じたときに合わせる（選んでいる途中で何度も切り替えない）
-            .onChange(of: theme.accentIndex) { _, index in
-                if index != ThemeStore.customIndex { AppIconManager.apply(accentIndex: index) }
-            }
-            .onChange(of: theme.isDark) { _, isDark in AppIconManager.apply(isDark: isDark) }
-        }
-    }
-
-    /// カスタムカラー（Plus）：好きな色を選べる
-    private var customColorButton: some View {
-        let selected = theme.isCustom
-        let rainbow = AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center)
-        return VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .fill(selected ? AnyShapeStyle(Color(theme.customColor)) : AnyShapeStyle(rainbow))
-                    .frame(width: 36, height: 36)
-                    .shadow(color: .black.opacity(selected ? 0.3 : 0.12), radius: selected ? 8 : 3, y: 2)
-                Image(systemName: selected ? "checkmark" : (plus.isPlus ? "plus" : "lock.fill"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                // Plus なら色を選ぶ画面、そうでなければ Plus の案内を開く
-                Button { if plus.isPlus { showColorPicker = true } else { showPlus = true } } label: {
-                    Color.clear.frame(width: 36, height: 36).contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(width: 36, height: 36)
-            .scaleEffect(selected ? 1.12 : 1.0)
-            Text(verbatim: S("カスタム", "Custom"))
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(selected ? .dlPrimary : .dlTextSub)
+            .onChange(of: theme.accentIndex) { _, _ in AppIconManager.apply() }
+            .onChange(of: theme.isDark) { _, _ in AppIconManager.apply() }
         }
     }
 
@@ -265,7 +225,7 @@ struct SettingsView: View {
                     Text(verbatim: S("Our Music Plus", "Our Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: plus.isPlus
                          ? S("ご利用ありがとうございます。タップで登録を管理", "Thanks for your support. Tap to manage")
-                         : S("好きな色のカスタムカラー、1年のプレイリストなど", "Custom colors, yearly playlists and more"))
+                         : S("1年のプレイリスト、長い期間のカスタムプレイリストなど", "Yearly playlists, longer custom playlists and more"))
                         .font(.caption)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.leading)
@@ -557,32 +517,5 @@ private struct ReminderSheet: View {
             ReminderStore.shared.cancelAll()
         }
         dismiss()
-    }
-}
-
-/// 好きな色を選ぶ画面（UIColorPickerViewController）。選ぶたびに onChange で知らせる
-private struct ColorPickerSheet: UIViewControllerRepresentable {
-    let color: UIColor
-    let onChange: (UIColor) -> Void
-
-    func makeUIViewController(context: Context) -> UIColorPickerViewController {
-        let picker = UIColorPickerViewController()
-        picker.selectedColor = color
-        picker.supportsAlpha = false
-        picker.title = S("カスタムカラー", "Custom Color")
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ picker: UIColorPickerViewController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
-
-    final class Coordinator: NSObject, UIColorPickerViewControllerDelegate {
-        let onChange: (UIColor) -> Void
-        init(onChange: @escaping (UIColor) -> Void) { self.onChange = onChange }
-
-        func colorPickerViewController(_ picker: UIColorPickerViewController, didSelect color: UIColor, continuously: Bool) {
-            onChange(color)
-        }
     }
 }

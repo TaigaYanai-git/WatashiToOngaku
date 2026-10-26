@@ -3,7 +3,7 @@ import StoreKit
 
 /// 「Our Music Plus」（自動更新サブスクリプション）の購入状態。
 /// 記録・フレンド・すべてのテーマカラーと背景・アイコン・月のプレイリストは無料。
-/// Plus では、カスタムカラー（好きな色）、1年のプレイリスト、期間の制限がないカスタムプレイリストが使える。
+/// Plus では、1年のプレイリスト、期間の制限がないカスタムプレイリストが使える。
 @MainActor
 final class PlusStore: ObservableObject {
     static let shared = PlusStore()
@@ -53,12 +53,5 @@ final class PlusStore: ObservableObject {
         #endif
         isPlus = active
         UserDefaults.standard.set(active, forKey: "plus_active")
-        if !active { Self.resetPlusOnlySettings() }
-    }
-
-    /// Plus が切れたら、カスタムカラーを標準の色に戻す
-    private static func resetPlusOnlySettings() {
-        let theme = ThemeStore.shared
-        if theme.isCustom { theme.accentIndex = 0 }
     }
 }
