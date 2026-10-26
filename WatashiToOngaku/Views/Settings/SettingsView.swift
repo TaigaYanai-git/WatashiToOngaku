@@ -169,8 +169,8 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
-            .onChange(of: theme.accentIndex) { _, _ in AppIconManager.apply() }
-            .onChange(of: theme.isDark) { _, _ in AppIconManager.apply() }
+            .onChange(of: theme.accentIndex) { _, index in AppIconManager.apply(accentIndex: index) }
+            .onChange(of: theme.isDark) { _, isDark in AppIconManager.apply(isDark: isDark) }
         }
     }
 
