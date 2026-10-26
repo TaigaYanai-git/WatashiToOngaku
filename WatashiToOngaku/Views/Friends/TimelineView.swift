@@ -1,3 +1,4 @@
+import MusicKit
 import SwiftUI
 
 /// フレンドが選んだ曲が、新しい順に流れる
@@ -8,7 +9,10 @@ struct TimelineView: View {
     @State private var showFriends = false
     @State private var showProfile = false
     @State private var reporting: FriendPost?
-    @State private var showPlaylist = false
+    /// タイムラインの曲を Apple Music で流している最中（"order" / "shuffle"）
+    @State private var playing: String?
+    @State private var playError: String?
+    @State private var showOffer = false
 
     var body: some View {
         NavigationStack {
@@ -34,13 +38,12 @@ struct TimelineView: View {
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }
-                    // みんなの今日のプレイリストは、目立たないよう右上の小さなボタンにまとめる
+                    // みんなが投稿した1週間分の曲を、タイムラインの上から順に／シャッフルで Apple Music で聴く
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button { showPlaylist = true } label: {
-                            Image(systemName: "music.note.list")
-                        }
-                        .foregroundColor(.dlPrimary)
-                        .accessibilityLabel(S("みんなの今日のプレイリスト", "Everyone's Daily Playlist"))
+                        playButton("play.fill", id: "order", label: S("1週間分を上から再生", "Play This Week in Order"))
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        playButton("shuffle", id: "shuffle", label: S("1週間分をシャッフル再生", "Shuffle This Week"))
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button { showFriends = true } label: {
@@ -58,7 +61,10 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
-            .sheet(isPresented: $showPlaylist) { GroupPlaylistView() }
+            .alert(Text(verbatim: playError ?? ""), isPresented: Binding(get: { playError != nil }, set: { if !$0 { playError = nil } })) {
+                Button("OK", role: .cancel) {}
+            }
+            .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
             .sheet(isPresented: $showProfile) {
                 VStack(spacing: 20) {
                     Text(verbatim: S("プロフィール", "Profile")).font(.headline).foregroundColor(.dlText)
@@ -113,6 +119,34 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
+    }
+
+    /// 今日を含めた1週間（7日）の投稿。タイムラインと同じ並び
+    private var weekPosts: [FriendPost] {
+        let start = Calendar.current.date(byAdding: .day, value: -6, to: Date()) ?? Date()
+        let firstKey = DayKey.string(from: start)
+        return social.timeline.filter { $0.dayKey >= firstKey }
+    }
+
+    private func playButton(_ symbol: String, id: String, label: String) -> some View {
+        Button {
+            playing = id
+            Task {
+                defer { playing = nil }
+                do {
+                    try await AppleMusicService.play(weekPosts.map(\.songID), shuffle: id == "shuffle")
+                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                    showOffer = true
+                } catch {
+                    playError = error.localizedDescription
+                }
+            }
+        } label: {
+            if playing == id { ProgressView().tint(.dlPrimary) } else { Image(systemName: symbol) }
+        }
+        .foregroundColor(.dlPrimary)
+        .disabled(weekPosts.isEmpty || playing != nil)
+        .accessibilityLabel(label)
     }
 
     private func message_(_ text: String) -> some View {
