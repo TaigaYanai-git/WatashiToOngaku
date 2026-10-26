@@ -517,9 +517,9 @@ final class SocialStore: ObservableObject {
         let start = Calendar.current.date(byAdding: .day, value: -(Self.timelineDays - 1), to: today)!
         let days = Set(Self.dayKeys(from: start, to: today))
         let posts = await posts(from: start, to: today, includeAllOfMine: false)
-        // 新しい日付を上に。同じ日付の中は投稿した順に並べる
+        // 新しい日付を上に。同じ日付の中は新しい投稿を上に並べる
         timeline = posts.filter { days.contains($0.dayKey) }.sorted {
-            $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt < $1.postedAt
+            $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
         }
     }
 
