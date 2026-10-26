@@ -66,6 +66,43 @@
         },
         {
           "glass": false,
+          "image-name": "mid-grooves.svg",
+          "name": "mid-grooves",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "glass": true,
+          "image-name": "mid-disc.svg",
+          "name": "mid-disc",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.44498,0.44498,0.44498,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.44498,0.44498,0.44498,1.00000"
+              }
+            }
+          ]
+        },
+        {
+          "glass": false,
           "image-name": "back-grooves.svg",
           "name": "back-grooves",
           "position": {
@@ -90,13 +127,13 @@
           "fill-specializations": [
             {
               "value": {
-                "solid": "srgb:0.41760,0.41760,0.41760,1.00000"
+                "solid": "srgb:0.27502,0.27502,0.27502,1.00000"
               }
             },
             {
               "appearance": "dark",
               "value": {
-                "solid": "srgb:0.41760,0.41760,0.41760,1.00000"
+                "solid": "srgb:0.27502,0.27502,0.27502,1.00000"
               }
             }
           ]

@@ -6,9 +6,9 @@
   - ライト：白い背景に盤の色
   - ダーク：黒い背景に盤の色（ブラックのテーマだけ、黒い背景で見えるよう灰色の盤）
 
-絵柄はレコードが2枚重なったもの（「Our」＝ふたりの音楽）。手前の盤はテーマカラー、
-奥の盤はテーマカラーを背景の色に寄せて淡く（ダークでは暗く）する。
-レイヤー（盤・溝と光・ラベル。奥の盤はラベルなし）の SVG もここで作り、WatashiToOngaku/AppIcon.icon/Assets に置いて共通で使う。
+絵柄は同じ大きさのレコードが3枚重なったもの（「Our」＝みんなの音楽）。手前の盤はテーマカラー、
+奥の盤ほどテーマカラーを背景の色に寄せて淡く（ダークでは暗く）する。
+レイヤー（盤・溝と光・ラベル。奥の2枚はラベルなし）の SVG もここで作り、WatashiToOngaku/AppIcon.icon/Assets に置いて共通で使う。
   python3 scripts/make_icons.py
 """
 import json
@@ -40,21 +40,23 @@ PHI = (1 + 5 ** 0.5) / 2
 
 
 def golden_records(size=1024):
-    """同じ大きさの2枚のレコードを黄金比で置く。
-    - 手前の盤：アイコンの中央。直径 = アイコンの幅 ÷ φ^1.5（2枚並べてもアイコンに収まる大きさ）
-    - 奥の盤：手前と同じ大きさで、真横（右）にずらす。
-      ずらす量は、横の線の上で「手前に隠れる部分 : 見える部分 = φ : 1」になるところ
+    """同じ大きさの3枚のレコードを黄金比で置く。
+    - 隣り合う盤は真横にずらす。ずらす量は、横の線の上で「手前に隠れる部分 : 見える部分 = φ : 1」になるところ
+    - 3枚全体の幅 = アイコンの幅 ÷ √φ。全体をアイコンの中央に置く（手前の盤が左、奥へ行くほど右）
     """
     c = size / 2
-    radius = size / PHI ** 1.5 / 2
-    shift = 2 * radius / (1 + PHI)
-    return [("", (c, c), round(radius, 1)), ("back-", (round(c + shift, 1), c), round(radius, 1))]
+    # 全体の幅 = 直径 + ずらす量 × 2 = 直径 × (1 + 2 / (1 + φ))
+    diameter = size / PHI ** 0.5 / (1 + 2 / (1 + PHI))
+    shift = diameter / (1 + PHI)
+    left = c - (diameter + 2 * shift) / 2 + diameter / 2
+    return [(prefix, (round(left + i * shift, 1), c), round(diameter / 2, 1))
+            for i, prefix in enumerate(["", "mid-", "back-"])]
 
 
-# 2枚のレコード：(名前の前置き, 中心, 半径)。上のものほど手前
+# 3枚のレコード：(名前の前置き, 中心, 半径)。上のものほど手前
 RECORDS = golden_records()
-# 奥の盤を背景の色にどれだけ寄せるか
-BACK_FADE = 0.42
+# 奥の盤を背景の色にどれだけ寄せるか（真ん中 1/φ²、いちばん奥 1/φ）
+FADES = {"": 0, "mid-": 1 / PHI ** 2, "back-": 1 / PHI}
 
 
 def srgb(rgb):
@@ -119,10 +121,11 @@ def layer(name, glass, fill=None):
 def make(background, disc):
     # 背景は「ライト」のときに自動のグラデーション、「ダーク」は黒一色。
     # ダーク用の値を書かないと iOS がダーク版を自動で作ってしまうので、同じ値を明示する
-    back = mix(disc, (1, 1, 1) if background == WHITE else (0, 0, 0), BACK_FADE)
+    toward = (1, 1, 1) if background == WHITE else (0, 0, 0)
     # 奥の盤のラベルは手前の盤に隠れる（透けて縁だけ白く見えてしまう）ので描かない
-    layers = [layer("label", True), layer("grooves", False), layer("disc", True, disc),
-              layer("back-grooves", False), layer("back-disc", True, back)]
+    layers = [layer("label", True)]
+    for prefix, _, _ in RECORDS:
+        layers += [layer(f"{prefix}grooves", False), layer(f"{prefix}disc", True, mix(disc, toward, FADES[prefix]))]
     return {
         "fill-specializations": fixed({"automatic-gradient": WHITE} if background == WHITE else {"solid": BLACK}),
         "groups": [{"layers": layers, "shadow": {"kind": "neutral", "opacity": 0.5},
