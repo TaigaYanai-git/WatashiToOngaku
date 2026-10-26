@@ -22,11 +22,11 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     profileSection
-                    if social.state == .ready { friendsSection }
                     plusSection
                     themeSection
                     languageSection
                     settingsSection
+                    if social.state == .ready { friendsSection }
                     aboutSection
                 }
                 .padding(.vertical, 16)
