@@ -89,11 +89,11 @@ struct PlaylistActions: View {
     }
 }
 
-/// 「上から再生」のアイコン：上向きの矢印の横に再生マーク
+/// 「上から再生」のアイコン：下向きの矢印の横に再生マーク
 struct PlayFromTopIcon: View {
     var body: some View {
         HStack(spacing: 1) {
-            Image(systemName: "arrow.up").imageScale(.small).fontWeight(.bold)
+            Image(systemName: "arrow.down").imageScale(.small).fontWeight(.bold)
             Image(systemName: "play.fill")
         }
     }
