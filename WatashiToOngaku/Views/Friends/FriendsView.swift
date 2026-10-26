@@ -227,8 +227,6 @@ private struct MyQRSheet: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Text(verbatim: S("このQRコードを読み取ってもらうと、フレンド申請が届きます", "Have a friend scan this code to send you a request"))
-                .font(.subheadline).foregroundColor(.dlTextSub).multilineTextAlignment(.center)
             if let url = social.inviteURL, let image = Self.qrImage(url.absoluteString) {
                 Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
                     .frame(width: 240, height: 240)
