@@ -13,6 +13,10 @@ struct TimelineView: View {
     @State private var playing: String?
     @State private var playError: String?
     @State private var showOffer = false
+    /// 再生ボタンで流し始めたら、流れている曲の投稿までスクロールして追いかける
+    @State private var followsPlayback = false
+    @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
+    @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
     var body: some View {
         NavigationStack {
@@ -91,6 +95,7 @@ struct TimelineView: View {
     }
 
     private var list: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(spacing: 14) {
                 if social.timeline.isEmpty {
@@ -111,7 +116,8 @@ struct TimelineView: View {
                     .padding(.top, 60)
                 }
                 ForEach(social.timeline) { post in
-                    PostCard(post: post) { reporting = post }
+                    PostCard(post: post, isPlaying: isNowPlaying(post)) { reporting = post }
+                        .id(post.id)
                 }
             }
             .padding(.horizontal, 20)
@@ -119,6 +125,24 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
+        .onChange(of: nowPlaying?.title) { _, _ in
+            guard followsPlayback, let post = weekPosts.first(where: isNowPlaying) else { return }
+            withAnimation { proxy.scrollTo(post.id, anchor: .center) }
+        }
+        }
+    }
+
+    /// ミュージックで流れている曲（タイムラインの再生ボタンで流したものを、アプリ内でも分かるようにする）
+    private var nowPlaying: (id: String?, title: String, artist: String?)? {
+        guard musicState.playbackStatus == .playing, let entry = musicQueue.currentEntry else { return nil }
+        if case .song(let song)? = entry.item { return (song.id.rawValue, song.title, song.artistName) }
+        return (nil, entry.title, entry.subtitle)
+    }
+
+    private func isNowPlaying(_ post: FriendPost) -> Bool {
+        guard let nowPlaying else { return false }
+        if let id = nowPlaying.id { return id == post.songID }
+        return nowPlaying.title == post.title && nowPlaying.artist == post.artist
     }
 
     /// 今日を含めた1週間（7日）の投稿。タイムラインと同じ並び
@@ -135,6 +159,7 @@ struct TimelineView: View {
                 defer { playing = nil }
                 do {
                     try await AppleMusicService.play(weekPosts.map(\.songID), shuffle: id == "shuffle")
+                    followsPlayback = true
                 } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
                     showOffer = true
                 } catch {
@@ -164,6 +189,8 @@ struct TimelineView: View {
 
 private struct PostCard: View {
     let post: FriendPost
+    /// ミュージックで今流れている曲
+    var isPlaying = false
     let onReport: () -> Void
     @Environment(\.openURL) private var openURL
 
@@ -177,9 +204,16 @@ private struct PostCard: View {
                     Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
                 }
                 Spacer()
-                Text(post.postedAt, style: .relative)
-                    .font(.caption2)
-                    .foregroundColor(.dlTextLight)
+                if isPlaying {
+                    Label(S("再生中", "Playing"), systemImage: "waveform")
+                        .symbolEffect(.variableColor.iterative)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.dlPrimary)
+                } else {
+                    Text(post.postedAt, style: .relative)
+                        .font(.caption2)
+                        .foregroundColor(.dlTextLight)
+                }
                 Menu {
                     if let link = post.appleMusicURL.flatMap(URL.init(string:)) {
                         Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
@@ -211,6 +245,12 @@ private struct PostCard: View {
             }
         }
         .dlCard()
+        .overlay {
+            if isPlaying {
+                RoundedRectangle(cornerRadius: 20).stroke(LinearGradient.dlPrimary, lineWidth: 2.5)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isPlaying)
     }
 
     private var dayText: String {
