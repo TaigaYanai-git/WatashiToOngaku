@@ -59,10 +59,10 @@ struct SettingsView: View {
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
 
-            // Accent colour picker (scrollable for 8 options)
+            // Accent colour picker (scrollable)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(ThemeStore.accents) { accent in
+                    ForEach(ThemeStore.displayAccents) { accent in
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 theme.accentIndex = accent.id

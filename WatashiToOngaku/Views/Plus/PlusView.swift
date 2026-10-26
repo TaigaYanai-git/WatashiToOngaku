@@ -24,7 +24,7 @@ struct PlusView: View {
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 14) {
                         benefit("paintpalette", S("カスタムカラー", "Custom colors"),
-                                S("9色のテーマカラーに加えて、好きな色をアプリの色にできます", "Pick any color you like for the app, beyond the 9 theme colors"))
+                                S("10色のテーマカラーに加えて、好きな色をアプリの色にできます", "Pick any color you like for the app, beyond the 10 theme colors"))
                         benefit("music.note.list", S("1年のプレイリスト", "Yearly playlists"),
                                 S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます", "Listen to a whole year of your songs in Apple Music"))
                         benefit("calendar.badge.clock", S("長い期間のカスタムプレイリスト", "Longer custom playlists"),
