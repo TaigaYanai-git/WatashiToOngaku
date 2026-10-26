@@ -89,16 +89,10 @@ struct ClipRangeView: View {
 
     private var rangePicker: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: "\(Self.time(start)) – \(Self.time(min(start + PreviewPlayer.clipLength, duration)))")
-                        .font(.title3.weight(.bold).monospacedDigit())
-                        .foregroundColor(.dlText)
-                    // 歌詞は取れないので、曲のどのあたりかを言葉で出す
-                    Text(verbatim: sectionText)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.dlPrimary)
-                }
+            HStack {
+                Text(verbatim: "\(Self.time(start)) – \(Self.time(min(start + PreviewPlayer.clipLength, duration)))")
+                    .font(.title3.weight(.bold).monospacedDigit())
+                    .foregroundColor(.dlText)
                 Spacer()
                 Text(verbatim: S("全体 \(Self.time(duration))", "of \(Self.time(duration))"))
                     .font(.caption.monospacedDigit())
@@ -121,12 +115,6 @@ struct ClipRangeView: View {
             }
             .tint(.dlPrimary)
             .disabled(maxStart <= 0)
-            // よく使う位置へすぐ移る
-            HStack(spacing: 8) {
-                jumpButton(S("最初から", "Start"), to: 0)
-                jumpButton(S("真ん中", "Middle"), to: maxStart / 2)
-                jumpButton(S("ラスト30秒", "Last 30s"), to: maxStart)
-            }
             Button {
                 if player.playingID == Self.auditionID { player.stop() } else { audition() }
             } label: {
@@ -136,38 +124,6 @@ struct ClipRangeView: View {
             .buttonStyle(SecondaryButtonStyle())
             .disabled(canPlayFull != true)
         }
-    }
-
-    /// 選んだ30秒が曲のどのあたりか
-    private var sectionText: String {
-        guard maxStart > 0 else { return S("曲の全体", "The whole song") }
-        if start <= 0 { return S("曲の始まりから", "From the beginning") }
-        if start >= maxStart { return S("曲のラスト", "The ending") }
-        let ratio = start / duration
-        switch ratio {
-        case ..<0.12: return S("イントロのあたり", "Around the intro")
-        case ..<0.4: return S("前半", "Early part")
-        case ..<0.65: return S("中盤", "Middle")
-        default: return S("後半", "Later part")
-        }
-    }
-
-    private func jumpButton(_ title: String, to value: Double) -> some View {
-        let selected = abs(start - value.rounded()) < 1
-        return Button {
-            start = value.rounded()
-            if canPlayFull == true { audition() }
-        } label: {
-            Text(verbatim: title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(selected ? .white : .dlPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(selected ? AnyShapeStyle(LinearGradient.dlPrimary) : AnyShapeStyle(Color.dlPrimaryBg))
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(maxStart <= 0)
     }
 
     private var subscriptionNote: some View {
