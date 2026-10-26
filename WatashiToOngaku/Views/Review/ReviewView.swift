@@ -126,11 +126,19 @@ struct ReviewView: View {
             }
             }
             .background(DlBackground().ignoresSafeArea())
-            .navigationTitle(Text(verbatim: S("ふりかえり", "Look Back")))
-            // 右上にボタンが3つあって中央に置く余裕がないので、ボタンの下に大きな見出しとして出す
-            .navigationBarTitleDisplayMode(.large)
+            // 右上にボタンが3つあって中央に置けないので、タイトルは左上の項目として、端から少し離して置く
+            .navigationTitle(Text(verbatim: ""))
+            .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Text(verbatim: S("ふりかえり", "Look Back"))
+                        .font(.headline)
+                        .foregroundColor(.dlText)
+                        .padding(.leading, 10)
+                        .fixedSize()
+                }
+                .sharedBackgroundHiddenIfAvailable()
                 // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する（年・年齢は Plus）
                 ToolbarItem(placement: .navigationBarTrailing) {
                     musicButton(id: "order", label: S("上から再生", "Play in Order")) { PlayFromTopIcon() } action: {
@@ -378,5 +386,17 @@ struct ReviewView: View {
             return
         }
         if let d = calendar.date(byAdding: span == .month ? .month : .year, value: delta, to: anchor) { anchor = d }
+    }
+}
+
+private extension ToolbarContent {
+    /// iOS 26 の、ツールバーの項目の後ろに付くガラスの丸を付けない（タイトルの文字だけを出す）
+    @ToolbarContentBuilder
+    func sharedBackgroundHiddenIfAvailable() -> some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            sharedBackgroundVisibility(.hidden)
+        } else {
+            self
+        }
     }
 }
