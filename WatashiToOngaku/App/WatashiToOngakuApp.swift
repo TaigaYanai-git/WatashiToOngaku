@@ -82,7 +82,7 @@ private struct AppRootView: View {
             AppIconManager.apply()
             await SocialStore.shared.start()
         }
-        // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンドに追加する
+        // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンド申請を送る
         .onOpenURL { url in
             guard SocialStore.code(in: url) != nil else { return }
             Task {
@@ -93,9 +93,8 @@ private struct AppRootView: View {
                     invite.result = S("フレンドを追加するには、先にタイムラインでニックネームを決めてください", "Set your nickname in Timeline first, then open the invite again")
                     return
                 }
-                invite.result = await social.addFriend(url: url)
-                    ? S("フレンドになりました！", "You're now friends!")
-                    : (social.lastError ?? S("追加できませんでした", "Couldn't add friend"))
+                invite.result = await social.addFriend(url: url).map(SocialStore.message(for:))
+                    ?? (social.lastError ?? S("申請できませんでした", "Couldn't send the request"))
             }
         }
         .alert(Text(verbatim: invite.result ?? ""),

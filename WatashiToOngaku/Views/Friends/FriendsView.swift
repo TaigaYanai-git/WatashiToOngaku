@@ -2,7 +2,7 @@ import CoreImage.CIFilterBuiltins
 import SwiftUI
 import VisionKit
 
-/// フレンドの追加（招待リンク・QRコード・フレンドコード）と一覧
+/// フレンドの申請（招待リンク・QRコード・フレンドコード）・届いた申請の承認と、フレンドの一覧
 struct FriendsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var social = SocialStore.shared
@@ -11,13 +11,16 @@ struct FriendsView: View {
     @State private var showMyQR = false
     @State private var message: String?
     @State private var removing: Friend?
+    @State private var declining: PendingFriend?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
+                    if !social.incomingRequests.isEmpty { incomingCard }
                     myCard
                     addCard
+                    if !social.outgoingRequests.isEmpty { outgoingCard }
                     friendList
                 }
                 .padding(20)
@@ -50,6 +53,17 @@ struct FriendsView: View {
                 Text(verbatim: S("お互いの曲が見えなくなります。ブロックすると、もう一度フレンドになることもできなくなります。",
                                  "You'll stop seeing each other's songs. Blocking also prevents becoming friends again."))
             }
+            .confirmationDialog(Text(verbatim: declining.map { S("\($0.nickname)さんからの申請", "Request from \($0.nickname)") } ?? ""),
+                                isPresented: Binding(get: { declining != nil }, set: { if !$0 { declining = nil } }),
+                                titleVisibility: .visible, presenting: declining) { request in
+                Button(S("申請を断る", "Decline"), role: .destructive) { social.decline(request, block: false) }
+                Button(S("断ってブロックする", "Decline and Block"), role: .destructive) { social.decline(request, block: true) }
+            } message: { _ in
+                Text(verbatim: S("相手には知らせません。ブロックすると、この人からの申請はもう届きません。",
+                                 "They won't be notified. Blocking stops further requests from them."))
+            }
+            .refreshable { await social.refresh() }
+            .task { await social.refresh() }
         }
     }
 
@@ -88,7 +102,7 @@ struct FriendsView: View {
 
     private var addCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: S("フレンドを追加", "Add a Friend"))
+            Text(verbatim: S("フレンドを申請", "Add a Friend"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
             HStack(spacing: 10) {
@@ -96,7 +110,7 @@ struct FriendsView: View {
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .textFieldStyle(DarkTextFieldStyle())
-                Button(S("追加", "Add")) {
+                Button(S("申請", "Request")) {
                     let code = codeInput
                     Task { await add { await social.addFriend(code: code) } }
                 }
@@ -110,6 +124,63 @@ struct FriendsView: View {
             .buttonStyle(SecondaryButtonStyle())
             .font(.subheadline)
         }
+        .dlCard()
+    }
+
+    /// 届いた申請。承認するとお互いの曲が見えるようになる
+    private var incomingCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(verbatim: S("フレンド申請（\(social.incomingRequests.count)件）", "Friend Requests (\(social.incomingRequests.count))"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            ForEach(social.incomingRequests) { request in
+                HStack(spacing: 12) {
+                    AvatarView(code: request.code, version: request.avatarVersion, nickname: request.nickname)
+                    Text(request.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
+                    Spacer()
+                    Button(S("断る", "Decline")) { declining = request }
+                        .font(.subheadline)
+                        .foregroundColor(.dlTextSub)
+                    Button(S("承認", "Accept")) {
+                        Task {
+                            message = await social.approve(request)
+                                ? S("\(request.nickname)さんとフレンドになりました！", "You and \(request.nickname) are now friends!")
+                                : (social.lastError ?? S("承認できませんでした", "Couldn't accept"))
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(LinearGradient.dlPrimary))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dlCard()
+    }
+
+    /// 送って、承認を待っている申請
+    private var outgoingCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(verbatim: S("承認待ち", "Pending"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            ForEach(social.outgoingRequests) { request in
+                HStack(spacing: 12) {
+                    AvatarView(code: request.code, version: request.avatarVersion, nickname: request.nickname)
+                    Text(request.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
+                    Spacer()
+                    Button(S("取り消す", "Cancel")) { Task { await social.cancelRequest(request) } }
+                        .font(.subheadline)
+                        .foregroundColor(.dlTextSub)
+                }
+            }
+            Text(verbatim: S("相手が承認すると、フレンドになります。", "You'll become friends once they accept."))
+                .font(.caption)
+                .foregroundColor(.dlTextLight)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dlCard()
     }
 
@@ -139,13 +210,13 @@ struct FriendsView: View {
         .dlCard()
     }
 
-    private func add(_ action: () async -> Bool) async {
-        if await action() {
-            codeInput = ""
-            message = S("フレンドになりました！", "You're now friends!")
-        } else {
-            message = social.lastError ?? S("追加できませんでした", "Couldn't add friend")
+    private func add(_ action: () async -> SocialStore.AddResult?) async {
+        guard let result = await action() else {
+            message = social.lastError ?? S("申請できませんでした", "Couldn't send the request")
+            return
         }
+        codeInput = ""
+        message = SocialStore.message(for: result)
     }
 }
 
@@ -156,7 +227,7 @@ private struct MyQRSheet: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Text(verbatim: S("このQRコードを読み取ってもらうと、フレンドになれます", "Have a friend scan this code"))
+            Text(verbatim: S("このQRコードを読み取ってもらうと、フレンド申請が届きます", "Have a friend scan this code to send you a request"))
                 .font(.subheadline).foregroundColor(.dlTextSub).multilineTextAlignment(.center)
             if let url = social.inviteURL, let image = Self.qrImage(url.absoluteString) {
                 Image(uiImage: image).interpolation(.none).resizable().scaledToFit()

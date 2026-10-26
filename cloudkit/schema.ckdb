@@ -18,8 +18,9 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
-    // フレンドコード（レコード名 = コード）→ 鍵・ニックネーム・アイコン。
-    // 検索用の索引は付けない（付けると他人の鍵を探し出せてしまう）。
+    // フレンドコード（レコード名 = コード）→ ニックネーム・アイコン・公開鍵。
+    // 鍵（secret）は申請・承認のときに相手の公開鍵で閉じて届けるので、ここには置かない（secret は古い版の名残で、常に空）。
+    // 検索用の索引は付けない（付けると他人のコードを探し出せてしまう）。
     RECORD TYPE FriendCode (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
@@ -30,6 +31,7 @@ DEFINE SCHEMA
         avatar          ASSET,
         avatarVersion   INT64,
         nickname        STRING,
+        publicKey       BYTES,
         secret          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
@@ -60,7 +62,7 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
-    // フレンド申請の郵便受け（レコード名 = "r-<宛先コード>-<枠>"）。索引なし
+    // フレンド申請の郵便受け（レコード名 = "r-<宛先コード>-<枠>"）。payload は送り主の鍵を宛先の公開鍵で閉じたもの。索引なし
     RECORD TYPE FriendRequest (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
@@ -69,6 +71,7 @@ DEFINE SCHEMA
         "___modifiedBy" REFERENCE,
         "___recordID"   REFERENCE,
         fromCode        STRING,
+        payload         BYTES,
         previousCode    STRING,
         sentAt          TIMESTAMP,
         GRANT WRITE TO "_creator",

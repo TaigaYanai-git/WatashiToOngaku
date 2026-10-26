@@ -1,5 +1,6 @@
 import CloudKit
 import Combine
+import CryptoKit
 import SwiftData
 import UIKit
 
@@ -9,12 +10,13 @@ import UIKit
 /// 公開 DB は誰でも読めるので、「鍵」を知っている人だけが読める形にする：
 /// - 利用者ごとにランダムな鍵（secret）を作り、投稿のレコード名を "s-<鍵>-<日付>" にする。
 ///   Post に検索用の索引は付けないので、鍵を知らない人は投稿を探し出せない。
-/// - フレンドコード（8文字）のレコード "FriendCode"（レコード名 = コード）に鍵とニックネームを置く。
-///   コード・招待リンク・QR コードを受け取る ＝ 鍵を受け取る、ということになる。
-/// - 相手を追加したら、相手の「郵便受け」（レコード名 "r-<相手のコード>-<番号>" の 64 枠）に自分のコードを置き、
-///   相手も自動で追加する（相互フレンド）。郵便受けもレコード名を指定して読むだけで、検索はしない。
+/// - フレンドコード（8文字）のレコード "FriendCode"（レコード名 = コード）にはニックネーム・アイコン・公開鍵だけを置く。
+///   コードを知っていても、鍵は分からない。
+/// - フレンドは「申請 → 承認」でなる。申請する人は、相手の「郵便受け」（レコード名 "r-<相手のコード>-<番号>" の 64 枠）に
+///   自分のコードと、相手の公開鍵でしか開けない形にした自分の鍵を置く。相手が承認すると、相手も同じように鍵を届けてくれる。
+///   郵便受けもレコード名を指定して読むだけで、検索はしない。
 /// - どのレコードにも検索用の索引を付けない（付けると他人のコードや投稿を探し出せてしまう）。
-/// - フレンドをやめる・ブロックしたら、自分の鍵とコードを作り直し、残りのフレンドにだけ新しいコードを届ける。
+/// - フレンドをやめる・ブロックしたら、自分の鍵とコードを作り直し、残りのフレンドにだけ新しい鍵を届ける。
 @MainActor
 final class SocialStore: ObservableObject {
     static let shared = SocialStore()
@@ -35,6 +37,10 @@ final class SocialStore: ObservableObject {
     @Published private(set) var friendCode = ""
     @Published private(set) var avatarVersion = 0
     @Published private(set) var friends: [Friend] = []
+    /// 届いたフレンド申請
+    @Published private(set) var incomingRequests: [PendingFriend] = []
+    /// 自分が送って、承認を待っている申請
+    @Published private(set) var outgoingRequests: [PendingFriend] = []
     @Published private(set) var timeline: [FriendPost] = []
     @Published private(set) var isRefreshing = false
     @Published var lastError: String?
@@ -70,9 +76,28 @@ final class SocialStore: ObservableObject {
         get { value("social_secret") as? String ?? "" }
         set { set(newValue, "social_secret") }
     }
-    private var friendCodes: [String] {
-        get { value("social_friends") as? [String] ?? [] }
-        set { set(newValue, "social_friends") }
+    /// フレンド（コード・相手の鍵・相手の iCloud 利用者）。相手が承認して鍵を届けてくれたら加わる
+    private var links: [FriendLink] {
+        get { (value("social_links") as? Data).flatMap { try? JSONDecoder().decode([FriendLink].self, from: $0) } ?? [] }
+        set { set(try? JSONEncoder().encode(newValue), "social_links") }
+    }
+    /// 自分が申請して、承認を待っている相手のコード
+    private var outgoingCodes: [String] {
+        get { value("social_outgoing") as? [String] ?? [] }
+        set { set(newValue, "social_outgoing") }
+    }
+    /// 届いた申請（承認するまで相手の鍵は使わない）。郵便受けの既読と同じく端末にだけ残す
+    private var incomingLinks: [FriendLink] {
+        get { local.data(forKey: "social_incoming").flatMap { try? JSONDecoder().decode([FriendLink].self, from: $0) } ?? [] }
+        set { local.set(try? JSONEncoder().encode(newValue), forKey: "social_incoming") }
+    }
+    /// 鍵を届け合うための鍵ペア。公開鍵を FriendCode に置き、届いた鍵はこの秘密鍵でしか開けない
+    private var keyPair: Curve25519.KeyAgreement.PrivateKey {
+        if let text = value("social_privateKey") as? String, let data = Data(base64Encoded: text),
+           let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data) { return key }
+        let key = Curve25519.KeyAgreement.PrivateKey()
+        set(key.rawRepresentation.base64EncodedString(), "social_privateKey")
+        return key
     }
     private var blocked: Set<String> {
         get { Set(value("social_blocked") as? [String] ?? []) }
@@ -130,11 +155,12 @@ final class SocialStore: ObservableObject {
         }
     }
 
-    /// コード → 鍵・ニックネーム の対応表を置く
+    /// コード → ニックネーム・公開鍵 の対応表を置く（鍵は置かない）
     private func publishFriendCode() async throws {
         let id = CKRecord.ID(recordName: friendCode)
         let record = (try? await publicDB.record(for: id)) ?? CKRecord(recordType: "FriendCode", recordID: id)
-        record["secret"] = secret
+        record["secret"] = nil
+        record["publicKey"] = keyPair.publicKey.rawRepresentation
         record["nickname"] = nickname
         // アイコンは版が変わったときだけ付け直す（毎回アップロードしない）
         if avatarVersion > 0, (record["avatarVersion"] as? Int) != avatarVersion,
@@ -262,36 +288,72 @@ final class SocialStore: ObservableObject {
         uploadedStamps = stamps
     }
 
-    // MARK: - フレンドの追加
+    // MARK: - フレンドの追加（申請と承認）
 
-    /// フレンドコードで追加する。相手にも自分を追加してもらう申請を置く
-    func addFriend(code raw: String) async -> Bool {
+    enum AddResult { case requested, becameFriends }
+
+    /// フレンドコードで申請する。相手が承認するとフレンドになる（相手からも申請が届いていれば、すぐにフレンドになる）
+    func addFriend(code raw: String) async -> AddResult? {
         let code = raw.uppercased().filter { $0.isLetter || $0.isNumber }
-        guard state == .ready else { lastError = S("先にニックネームを決めてください", "Set your nickname first"); return false }
-        guard code.count == 8 else { lastError = S("フレンドコードは8文字です", "Friend codes are 8 characters"); return false }
-        guard code != friendCode else { lastError = S("自分のコードです", "That's your own code"); return false }
-        guard !blocked.contains(code) else { lastError = S("ブロック中のユーザーです", "You've blocked this user"); return false }
-        guard (try? await publicDB.record(for: CKRecord.ID(recordName: code))) != nil else {
-            lastError = S("このコードのユーザーが見つかりません", "No user found for this code")
-            return false
+        guard state == .ready else { lastError = S("先にニックネームを決めてください", "Set your nickname first"); return nil }
+        guard code.count == 8 else { lastError = S("フレンドコードは8文字です", "Friend codes are 8 characters"); return nil }
+        guard code != friendCode else { lastError = S("自分のコードです", "That's your own code"); return nil }
+        guard !blocked.contains(code) else { lastError = S("ブロック中のユーザーです", "You've blocked this user"); return nil }
+        guard !links.contains(where: { $0.code == code }) else { lastError = S("すでにフレンドです", "You're already friends"); return nil }
+        if let request = incomingRequests.first(where: { $0.code == code }) {
+            return await approve(request) ? .becameFriends : nil
         }
-        if !friendCodes.contains(code) { friendCodes.append(code) }
-        await sendFriendRequest(to: code)
+        guard await sendKey(to: code) else { return nil }
+        if !outgoingCodes.contains(code) { outgoingCodes.append(code) }
         await refresh()
-        return true
+        return .requested
     }
 
-    /// 招待リンク・QR コード（…/add.html?c=コード または watashitoongaku://add?c=コード）から追加する
-    func addFriend(url: URL) async -> Bool {
+    static func message(for result: AddResult) -> String {
+        switch result {
+        case .requested: return S("フレンド申請を送りました。相手が承認するとフレンドになります。",
+                                  "Request sent. You'll become friends once they accept.")
+        case .becameFriends: return S("フレンドになりました！", "You're now friends!")
+        }
+    }
+
+    /// 招待リンク・QR コード（…/add.html?c=コード または watashitoongaku://add?c=コード）から申請する
+    func addFriend(url: URL) async -> AddResult? {
         guard let code = Self.code(in: url) else {
             lastError = S("Our Music の招待リンクではありません", "This isn't an Our Music invite link")
-            return false
+            return nil
         }
         return await addFriend(code: code)
     }
 
     static func code(in url: URL) -> String? {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "c" }?.value
+    }
+
+    /// 届いた申請を承認する：相手をフレンドに加え、自分の鍵を相手に届ける
+    func approve(_ request: PendingFriend) async -> Bool {
+        guard let link = incomingLinks.first(where: { $0.code == request.code }) else { return false }
+        guard await sendKey(to: link.code) else { return false }
+        incomingLinks.removeAll { $0.code == link.code }
+        var current = links
+        current.removeAll { $0.code == link.code }
+        links = current + [link]
+        await refresh()
+        return true
+    }
+
+    /// 申請を断る（相手には知らせない）。block なら、この人からの申請はもう受け取らない
+    func decline(_ request: PendingFriend, block: Bool) {
+        incomingLinks.removeAll { $0.code == request.code }
+        incomingRequests.removeAll { $0.code == request.code }
+        if block { blocked.insert(request.code) }
+    }
+
+    /// 送った申請を取り消す（相手の郵便受けに置いた鍵も消す）
+    func cancelRequest(_ request: PendingFriend) async {
+        outgoingCodes.removeAll { $0 == request.code }
+        outgoingRequests.removeAll { $0.code == request.code }
+        await withdrawKey(from: request.code)
     }
 
     /// 郵便受けの枠の数。送る側はコードから決まる枠から順に空きを探す
@@ -301,48 +363,121 @@ final class SocialStore: ObservableObject {
         CKRecord.ID(recordName: "r-\(code)-\(slot)")
     }
 
-    private func sendFriendRequest(to code: String, previousCode: String? = nil) async {
+    /// 相手の郵便受けに、自分のコードと鍵（相手の公開鍵でしか開けない形）を置く
+    @discardableResult
+    private func sendKey(to code: String, previousCode: String? = nil) async -> Bool {
+        guard let profile = try? await publicDB.record(for: CKRecord.ID(recordName: code)) else {
+            lastError = S("このコードのユーザーが見つかりません", "No user found for this code")
+            return false
+        }
+        guard let publicKey = profile["publicKey"] as? Data,
+              let payload = try? Self.seal(secret, from: friendCode, to: code, publicKey: publicKey) else {
+            lastError = S("相手の Our Music が古いため申請できません。アップデートしてもらってください",
+                          "Their Our Music is out of date. Ask them to update the app.")
+            return false
+        }
         let start = abs(friendCode.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) }) % Self.inboxSlots
         for offset in 0..<Self.inboxSlots {
             let id = Self.inboxID(code, (start + offset) % Self.inboxSlots)
             // 自分が前に置いた枠なら上書きする。他人の枠なら次へ
+            let record: CKRecord
             if let existing = try? await publicDB.record(for: id) {
                 guard existing.creatorUserRecordID?.recordName == CKCurrentUserDefaultName else { continue }
-                existing["fromCode"] = friendCode
-                existing["previousCode"] = previousCode
-                existing["sentAt"] = Date()
-                if (try? await save(existing)) != nil { return }
-                continue
+                record = existing
+            } else {
+                record = CKRecord(recordType: "FriendRequest", recordID: id)
             }
-            let request = CKRecord(recordType: "FriendRequest", recordID: id)
-            request["fromCode"] = friendCode
-            request["previousCode"] = previousCode
-            request["sentAt"] = Date()
-            if (try? await save(request)) != nil { return }
+            record["fromCode"] = friendCode
+            record["previousCode"] = previousCode
+            record["payload"] = payload
+            record["sentAt"] = Date()
+            if (try? await save(record)) != nil { return true }
         }
+        lastError = S("相手に申請を届けられませんでした", "Couldn't deliver the request")
+        return false
     }
 
-    /// 自分の郵便受けを見て、相手を追加する（相互フレンドにする）。
-    /// 相手がコードを作り直したときは previousCode で古いコードを置き換える
+    /// 相手の郵便受けから、自分が置いた鍵を消す
+    private func withdrawKey(from code: String) async {
+        let ids = (0..<Self.inboxSlots).map { Self.inboxID(code, $0) }
+        guard let found = try? await publicDB.records(for: ids, desiredKeys: ["fromCode"]) else { return }
+        let mine = found.compactMap { id, result -> CKRecord.ID? in
+            guard let record = try? result.get(), record.creatorUserRecordID?.recordName == CKCurrentUserDefaultName,
+                  record["fromCode"] as? String == friendCode else { return nil }
+            return id
+        }
+        if !mine.isEmpty { _ = try? await publicDB.modifyRecords(saving: [], deleting: mine) }
+    }
+
+    /// 自分の郵便受けを読む。
+    /// - 申請した相手から鍵が届いた ＝ 承認された → フレンドに加える
+    /// - フレンドがコードを作り直した（previousCode）→ 新しいコードと鍵に置き換える
+    /// - それ以外 → 届いた申請として、承認を待つ
+    /// 鍵を置いた人とコードの持ち主が同じ iCloud 利用者かを確かめて、他人のコードを名乗った申請は捨てる
     private func processFriendRequests() async {
         let ids = (0..<Self.inboxSlots).map { Self.inboxID(friendCode, $0) }
         guard let found = try? await publicDB.records(for: ids) else { return }
-        var codes = friendCodes
         var handled = handledRequests
+        var received: [(record: CKRecord, from: String, stamp: String)] = []
         for case let (_, .success(record)) in found {
             let from = record["fromCode"] as? String ?? ""
             let stamp = "\(record.recordID.recordName)@\(record.modificationDate?.timeIntervalSince1970 ?? 0)"
-            guard !from.isEmpty, !handled.contains(stamp) else { continue }
-            handled.insert(stamp)
-            guard !blocked.contains(from) else { continue }
-            if let previous = record["previousCode"] as? String {
-                guard codes.contains(previous) else { continue } // やめたフレンドのコード更新は受け取らない
-                codes.removeAll { $0 == previous }
+            guard !from.isEmpty, from != friendCode, !handled.contains(stamp) else { continue }
+            received.append((record, from, stamp))
+        }
+        guard !received.isEmpty,
+              let owners = try? await publicDB.records(for: Array(Set(received.map { CKRecord.ID(recordName: $0.from) })),
+                                                       desiredKeys: ["nickname"]) else { return }
+        var current = links, outgoing = outgoingCodes, incoming = incomingLinks
+        for item in received {
+            handled.insert(item.stamp)
+            let creator = item.record.creatorUserRecordID?.recordName ?? ""
+            guard !blocked.contains(item.from),
+                  case .success(let owner)? = owners[CKRecord.ID(recordName: item.from)],
+                  owner.creatorUserRecordID?.recordName == creator,
+                  let payload = item.record["payload"] as? Data,
+                  let secret = Self.open(payload, with: keyPair, from: item.from, to: friendCode) else { continue }
+            let link = FriendLink(code: item.from, secret: secret, creator: creator)
+            if let previous = item.record["previousCode"] as? String {
+                // やめたフレンドや、別の人からのコード更新は受け取らない
+                guard let index = current.firstIndex(where: { $0.code == previous }), current[index].creator == creator else { continue }
+                current[index] = link
+            } else if let index = current.firstIndex(where: { $0.code == item.from }) {
+                current[index] = link
+            } else if outgoing.contains(item.from) {
+                outgoing.removeAll { $0 == item.from }
+                current.append(link)
+            } else {
+                incoming.removeAll { $0.code == item.from }
+                incoming.append(link)
             }
-            if !codes.contains(from) { codes.append(from) }
         }
         handledRequests = handled
-        friendCodes = codes
+        links = current
+        outgoingCodes = outgoing
+        incomingLinks = incoming
+    }
+
+    // MARK: - 鍵の受け渡し（HPKE：相手の公開鍵で閉じ、相手の秘密鍵でしか開けない）
+
+    private static let ciphersuite = HPKE.Ciphersuite.Curve25519_SHA256_ChachaPoly
+
+    /// 誰から誰へのものかを結び付けて、別の宛先に使い回せないようにする
+    private static func info(from: String, to: String) -> Data { Data("OurMusic-key \(from)>\(to)".utf8) }
+
+    private static func seal(_ secret: String, from: String, to: String, publicKey: Data) throws -> Data {
+        let key = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: publicKey)
+        var sender = try HPKE.Sender(recipientKey: key, ciphersuite: ciphersuite, info: info(from: from, to: to))
+        let sealed = try sender.seal(Data(secret.utf8))
+        return sender.encapsulatedKey + sealed
+    }
+
+    private static func open(_ payload: Data, with key: Curve25519.KeyAgreement.PrivateKey, from: String, to: String) -> String? {
+        guard payload.count > 32,
+              var recipient = try? HPKE.Recipient(privateKey: key, ciphersuite: ciphersuite, info: info(from: from, to: to),
+                                                  encapsulatedKey: Data(payload.prefix(32))),
+              let opened = try? recipient.open(Data(payload.dropFirst(32))) else { return nil }
+        return String(data: opened, encoding: .utf8)
     }
 
     // MARK: - タイムライン
@@ -353,18 +488,25 @@ final class SocialStore: ObservableObject {
         defer { isRefreshing = false }
         await processFriendRequests()
 
-        // フレンドのコード → 鍵・ニックネーム
-        let codeIDs = friendCodes.map { CKRecord.ID(recordName: $0) }
-        // アイコン画像は取らず、版番号だけ取る（画像は AvatarStore が必要なときだけ取る）
-        let codeRecords = (try? await publicDB.records(for: codeIDs, desiredKeys: ["secret", "nickname", "avatarVersion"])) ?? [:]
-        var newFriends: [Friend] = []
-        for code in friendCodes {
-            guard case .success(let record)? = codeRecords[CKRecord.ID(recordName: code)],
-                  let secret = record["secret"] as? String else { continue }
+        // フレンド・申請の相手のニックネームとアイコンの版（画像は AvatarStore が必要なときだけ取る）
+        let links = self.links, incoming = incomingLinks, outgoing = outgoingCodes
+        let codes = Set(links.map(\.code) + incoming.map(\.code) + outgoing)
+        let codeRecords = codes.isEmpty ? [:] : ((try? await publicDB.records(
+            for: codes.map { CKRecord.ID(recordName: $0) }, desiredKeys: ["nickname", "avatarVersion"])) ?? [:])
+        func profile(_ code: String) -> (nickname: String, version: Int)? {
+            guard case .success(let record)? = codeRecords[CKRecord.ID(recordName: code)] else { return nil }
             let version = record["avatarVersion"] as? Int ?? 0
-            newFriends.append(Friend(code: code, nickname: record["nickname"] as? String ?? S("フレンド", "Friend"),
-                                     secret: secret, avatarVersion: version))
             AvatarStore.shared.fetchIfNeeded(code: code, version: version, in: publicDB)
+            return (record["nickname"] as? String ?? S("フレンド", "Friend"), version)
+        }
+        let newFriends = links.compactMap { link in
+            profile(link.code).map { Friend(code: link.code, nickname: $0.nickname, secret: link.secret, avatarVersion: $0.version) }
+        }
+        incomingRequests = incoming.compactMap { link in
+            profile(link.code).map { PendingFriend(code: link.code, nickname: $0.nickname, avatarVersion: $0.version) }
+        }
+        outgoingRequests = outgoing.compactMap { code in
+            profile(code).map { PendingFriend(code: code, nickname: $0.nickname, avatarVersion: $0.version) }
         }
 
         friends = newFriends.sorted { $0.nickname < $1.nickname }
@@ -427,7 +569,7 @@ final class SocialStore: ObservableObject {
     /// フレンドをやめる。自分の鍵とコードを作り直して、相手が読めないようにする
     func remove(_ friend: Friend, block: Bool) async {
         if block { blocked.insert(friend.code) }
-        friendCodes.removeAll { $0 == friend.code }
+        links.removeAll { $0.code == friend.code }
         friends.removeAll { $0.code == friend.code }
         timeline.removeAll { $0.friend.code == friend.code }
         await rotateIdentity()
@@ -435,6 +577,8 @@ final class SocialStore: ObservableObject {
 
     private func rotateIdentity() async {
         let oldSecret = secret, oldCode = friendCode
+        // 承認待ちの申請に置いた古い鍵は消して、新しいコードで送り直す
+        for code in outgoingCodes { await withdrawKey(from: code) }
         secret = Self.random(24)
         friendCode = Self.random(8)
         set(friendCode, "social_code")
@@ -450,8 +594,9 @@ final class SocialStore: ObservableObject {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
         }
         local.removeObject(forKey: "social_uploaded_\(oldSecret)")
-        // 残っているフレンドに新しいコードを届ける
-        for code in friendCodes { await sendFriendRequest(to: code, previousCode: oldCode) }
+        // 残っているフレンドに新しいコードと鍵を届ける
+        for link in links { await sendKey(to: link.code, previousCode: oldCode) }
+        for code in outgoingCodes { await sendKey(to: code) }
         await refresh()
     }
 
@@ -486,6 +631,21 @@ final class SocialStore: ObservableObject {
         }
         return text
     }
+}
+
+/// フレンド・届いた申請の相手：コード、相手の鍵、相手の iCloud 利用者（コード更新のなりすまし防止に照合する）
+struct FriendLink: Codable, Hashable {
+    var code: String
+    var secret: String
+    var creator: String
+}
+
+/// 申請中・申請が届いた相手（まだ鍵は使わない）
+struct PendingFriend: Identifiable, Hashable {
+    let code: String
+    let nickname: String
+    var avatarVersion = 0
+    var id: String { code }
 }
 
 struct Friend: Identifiable, Hashable {

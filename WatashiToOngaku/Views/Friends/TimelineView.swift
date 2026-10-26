@@ -45,6 +45,12 @@ struct TimelineView: View {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button { showFriends = true } label: {
                             Image(systemName: "person.2.badge.plus")
+                                // 届いたフレンド申請があれば印を付ける
+                                .overlay(alignment: .topTrailing) {
+                                    if !social.incomingRequests.isEmpty {
+                                        Circle().fill(Color.red).frame(width: 9, height: 9).offset(x: 3, y: -3)
+                                    }
+                                }
                         }
                         .foregroundColor(.dlPrimary)
                         .accessibilityLabel(S("フレンド", "Friends"))
@@ -197,8 +203,8 @@ struct SocialSetupView: View {
                     .font(.title3.weight(.bold))
                     .foregroundColor(.dlText)
                     .multilineTextAlignment(.center)
-                Text(verbatim: S("あなたの曲は、招待したフレンドだけに見えます。日ごとに「共有しない」「メモは見せない」も選べます。",
-                                 "Only friends you invite can see your songs. You can hide a day or its note anytime."))
+                Text(verbatim: S("あなたの曲は、お互いに承認したフレンドだけに見えます。日ごとに「共有しない」「メモは見せない」も選べます。",
+                                 "Only friends you accept can see your songs. You can hide a day or its note anytime."))
                     .font(.subheadline)
                     .foregroundColor(.dlTextSub)
                     .multilineTextAlignment(.center)
