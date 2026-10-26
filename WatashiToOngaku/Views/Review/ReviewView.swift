@@ -2,7 +2,7 @@ import MusicKit
 import SwiftData
 import SwiftUI
 
-/// 月・年ごとに、選んだ曲とよく選んだアーティストをふりかえる
+/// 月・年・年齢ごとに、選んだ曲とよく選んだアーティストをふりかえる。右上のボタンで Apple Music で聴ける
 struct ReviewView: View {
     @EnvironmentObject private var router: NavigationRouter
     @EnvironmentObject private var theme: ThemeStore
@@ -13,13 +13,29 @@ struct ReviewView: View {
     @ObservedObject private var plus = PlusStore.shared
     /// 再生ボタンで流し始めたら、流れている曲までスクロールして追いかける
     @State private var followsPlayback = false
+    @AppStorage(Birthday.key) private var birthdayStored: Double = 0
+    /// 表示している年齢（nil なら今の年齢）
+    @State private var shownAge: Int?
+    @State private var showBirthday = false
+    @State private var showPlus = false
+    /// Apple Music で流す・保存している最中（"order" / "shuffle" / "save"）
+    @State private var working: String?
+    @State private var musicError: String?
+    @State private var showOffer = false
+    @State private var savedName: String?
     @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
     @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
     enum Span: String, CaseIterable, Identifiable {
-        case month, year
+        case month, year, age
         var id: String { rawValue }
-        var label: String { self == .month ? S("月", "Month") : S("年", "Year") }
+        var label: String {
+            switch self {
+            case .month: return S("月", "Month")
+            case .year: return S("年", "Year")
+            case .age: return S("年齢", "Age")
+            }
+        }
     }
 
     private let calendar = Calendar.current
@@ -30,11 +46,38 @@ struct ReviewView: View {
         return String(key.prefix(span == .month ? 7 : 4))
     }
 
-    private var periodEntries: [SongEntry] { entries.filter { $0.dayKey.hasPrefix(prefix) } }
+    private var birthday: Date? { Birthday.date(from: birthdayStored) }
+    private var currentAge: Int { birthday.map { Birthday.age(birthday: $0) } ?? 0 }
+    private var age: Int { min(shownAge ?? currentAge, currentAge) }
+
+    /// その年齢だった期間の日付（"yyyy-MM-dd"）
+    private var ageKeys: (start: String, end: String)? {
+        guard let birthday else { return nil }
+        let range = Birthday.range(age: age, birthday: birthday)
+        return (DayKey.string(from: range.start), DayKey.string(from: range.end))
+    }
+
+    private var periodEntries: [SongEntry] {
+        if span == .age {
+            guard let keys = ageKeys else { return [] }
+            return entries.filter { $0.dayKey >= keys.start && $0.dayKey <= keys.end }
+        }
+        return entries.filter { $0.dayKey.hasPrefix(prefix) }
+    }
 
     private var periodTitle: String {
-        anchor.formatted(span == .month ? .dateTime.year().month() : .dateTime.year())
+        switch span {
+        case .month: return anchor.formatted(.dateTime.year().month())
+        case .year: return anchor.formatted(.dateTime.year())
+        case .age: return S("\(age)歳", "Age \(age)")
+        }
     }
+
+    /// ライブラリに保存したプレイリストを、同じ期間なら作り直さずに入れ替えるための名前
+    private var playlistKey: String { span == .age ? "age-\(age)" : "mine-\(prefix)" }
+
+    /// 1年ぶん（年・年齢）のプレイリストは Plus
+    private var locked: Bool { span != .month && !plus.isPlus }
 
     var body: some View {
         NavigationStack {
@@ -46,6 +89,9 @@ struct ReviewView: View {
                     }
                     .pickerStyle(.segmented)
 
+                    if span == .age && birthday == nil {
+                        birthdayCard
+                    } else {
                     periodHeader
 
                     if periodEntries.isEmpty {
@@ -58,9 +104,9 @@ struct ReviewView: View {
                         .dlCard(padding: 32)
                     } else {
                         summary
-                        playlistCard
                         topArtists
                         songList
+                    }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -84,38 +130,90 @@ struct ReviewView: View {
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button { showShare = true } label: { Image(systemName: "square.and.arrow.up") }
                         .foregroundColor(.dlPrimary)
                         .disabled(periodEntries.isEmpty)
                         .accessibilityLabel(S("シェア画像を作る", "Create Share Image"))
                 }
+                // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する（年・年齢は Plus）
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    musicButton(id: "order", label: S("上から再生", "Play in Order")) { PlayFromTopIcon() } action: {
+                        try await AppleMusicService.play(periodEntries.map(\.songID))
+                        followsPlayback = true
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    musicButton(id: "shuffle", label: S("シャッフル再生", "Shuffle")) { Image(systemName: "shuffle") } action: {
+                        try await AppleMusicService.play(periodEntries.map(\.songID), shuffle: true)
+                        followsPlayback = true
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    musicButton(id: "save", label: S("ライブラリに保存", "Save to Library")) { Image(systemName: "plus.square.on.square") } action: {
+                        // ライブラリには日付の古い順に保存する
+                        let name = S("Our Music \(periodTitle)", "Our Music \(periodTitle)")
+                        try await AppleMusicService.save(periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID), name: name,
+                                                         description: S("Our Music で選んだ、\(periodTitle)の今日の一曲",
+                                                                        "My songs of the day, \(periodTitle), from Our Music"),
+                                                         key: playlistKey)
+                        savedName = name
+                    }
+                }
             }
             .sheet(isPresented: $showShare) { ShareCardSheet(title: periodTitle, entries: periodEntries) }
+            .sheet(isPresented: $showBirthday) { BirthdaySheet() }
+            .sheet(isPresented: $showPlus) { PlusView() }
+            .alert(Text(verbatim: musicError ?? ""), isPresented: Binding(get: { musicError != nil }, set: { if !$0 { musicError = nil } })) {
+                Button("OK", role: .cancel) {}
+            }
+            .alert(Text(verbatim: S("「\(savedName ?? "")」をライブラリに保存しました", "Saved \"\(savedName ?? "")\" to your library")),
+                   isPresented: Binding(get: { savedName != nil }, set: { if !$0 { savedName = nil } })) {
+                Button(S("ミュージックで開く", "Open Music")) { AppleMusicService.openMusicApp() }
+                Button("OK", role: .cancel) {}
+            }
+            .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
         }
     }
 
-    /// この月・年に選んだ曲を Apple Music で聴く（年は Plus）
-    @ViewBuilder
-    private var playlistCard: some View {
-        if span == .year && !plus.isPlus {
-            PlusLockedCard(title: S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます",
-                                    "Listen to a whole year of your songs as an Apple Music playlist"))
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                Label(S("\(periodTitle)のプレイリスト", "\(periodTitle) Playlist"), systemImage: "music.note.list")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.dlTextSub)
-                // 「選んだ曲」の上から順に／シャッフルで流す。ライブラリには日付の順に保存する
-                PlaylistActions(songIDs: periodEntries.map(\.songID),
-                                saveSongIDs: periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID),
-                                name: S("Our Music \(periodTitle)", "Our Music \(periodTitle)"),
-                                description: S("Our Music で選んだ、\(periodTitle)の今日の一曲", "My songs of the day in \(periodTitle), from Our Music"),
-                                key: "mine-\(prefix)") { followsPlayback = true }
-                    .id(prefix)
+    private func musicButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
+                                         action: @escaping () async throws -> Void) -> some View {
+        Button {
+            guard !locked else { showPlus = true; return }
+            working = id
+            Task {
+                defer { working = nil }
+                do {
+                    try await action()
+                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                    showOffer = true
+                } catch {
+                    musicError = error.localizedDescription
+                }
             }
-            .dlCard()
+        } label: {
+            if working == id { ProgressView().tint(.dlPrimary) } else { icon() }
         }
+        .foregroundColor(.dlPrimary)
+        .disabled(periodEntries.isEmpty || working != nil)
+        .accessibilityLabel(label)
+    }
+
+    /// 年齢のタブで、誕生日がまだないとき
+    private var birthdayCard: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "gift").font(.largeTitle).foregroundColor(.dlPrimary)
+            Text(verbatim: S("誕生日を登録すると、年齢ごとに選んだ曲をふりかえって、プレイリストで聴けます",
+                             "Add your birthday to look back on and listen to your songs by age"))
+                .font(.subheadline)
+                .foregroundColor(.dlTextSub)
+                .multilineTextAlignment(.center)
+            Button(S("誕生日を登録", "Add Birthday")) { showBirthday = true }
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 30)
+        }
+        .frame(maxWidth: .infinity)
+        .dlCard(padding: 24)
     }
 
     /// ミュージックの今の曲（一時停止中も含む）
@@ -139,10 +237,27 @@ struct ReviewView: View {
     private var periodHeader: some View {
         HStack {
             arrow("chevron.left") { shift(-1) }
+                .disabled(span == .age && age <= 0)
+                .opacity(span == .age && age <= 0 ? 0.35 : 1)
             Spacer()
-            Text(verbatim: periodTitle).font(.headline).foregroundColor(.dlText)
+            VStack(spacing: 2) {
+                Text(verbatim: periodTitle).font(.headline).foregroundColor(.dlText)
+                // 年齢は、その年齢だった期間も出す（タップで誕生日を変える）
+                if span == .age, let birthday {
+                    let range = Birthday.range(age: age, birthday: birthday)
+                    Button {
+                        showBirthday = true
+                    } label: {
+                        Text(verbatim: "\(range.start.formatted(.dateTime.year().month(.defaultDigits).day())) – \(range.end.formatted(.dateTime.year().month(.defaultDigits).day()))")
+                            .font(.caption)
+                            .foregroundColor(.dlTextSub)
+                    }
+                }
+            }
             Spacer()
             arrow("chevron.right") { shift(1) }
+                .disabled(span == .age && age >= currentAge)
+                .opacity(span == .age && age >= currentAge ? 0.35 : 1)
         }
     }
 
@@ -250,6 +365,10 @@ struct ReviewView: View {
     }
 
     private func shift(_ delta: Int) {
+        if span == .age {
+            shownAge = max(0, min(age + delta, currentAge))
+            return
+        }
         if let d = calendar.date(byAdding: span == .month ? .month : .year, value: delta, to: anchor) { anchor = d }
     }
 }

@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var showPlus = false
     @State private var showManageSubscription = false
     @State private var showBlocked = false
+    @State private var showBirthday = false
+    @AppStorage(Birthday.key) private var birthdayStored: Double = 0
     @State private var restoring = false
     @State private var restoreMessage: String?
 
@@ -38,6 +40,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
+            .sheet(isPresented: $showBirthday) { BirthdaySheet() }
             .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
         }
@@ -227,7 +230,7 @@ struct SettingsView: View {
                     Text(verbatim: S("Our Music Plus", "Our Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: plus.isPlus
                          ? S("ご利用ありがとうございます。タップで登録を管理", "Thanks for your support. Tap to manage")
-                         : S("1年のプレイリスト、長い期間のカスタムプレイリストなど", "Yearly playlists, longer custom playlists and more"))
+                         : S("1年のプレイリスト、年齢ごとのプレイリストなど", "Yearly and by-age playlists and more"))
                         .font(.caption)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.leading)
@@ -288,6 +291,11 @@ struct SettingsView: View {
             .cornerRadius(20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .padding(.horizontal, 20)
+            // 年齢ごとのプレイリスト（ふりかえり）に使う
+            row(icon: "gift", title: S("誕生日", "Birthday"),
+                detail: Birthday.date(from: birthdayStored)?.formatted(.dateTime.year().month(.defaultDigits).day()) ?? S("未登録", "Not set")) {
+                showBirthday = true
+            }
         }
     }
 

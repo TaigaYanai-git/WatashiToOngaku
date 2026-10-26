@@ -25,8 +25,8 @@ struct PlusView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         benefit("music.note.list", S("1年のプレイリスト", "Yearly playlists"),
                                 S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます", "Listen to a whole year of your songs in Apple Music"))
-                        benefit("calendar.badge.clock", S("長い期間のカスタムプレイリスト", "Longer custom playlists"),
-                                S("好きな期間の曲をまとめるプレイリストを、\(PlusStore.freeCustomPlaylistDays)日より長い期間でも作れます", "Make custom playlists longer than \(PlusStore.freeCustomPlaylistDays) days"))
+                        benefit("gift", S("年齢ごとのプレイリスト", "Playlists by age"),
+                                S("誕生日を登録すると、その年齢の1年に選んだ曲をプレイリストで聴けます", "Add your birthday to listen to each year of your age as a playlist"))
                         benefit("heart", S("開発を応援", "Support development"),
                                 S("広告なしで続けていくための力になります", "Helps keep the app ad-free"))
                     }
@@ -59,26 +59,5 @@ struct PlusView: View {
                 Text(verbatim: detail).font(.caption).foregroundColor(.dlTextSub)
             }
         }
-    }
-}
-
-/// Plus の機能を開いたときに、中身の代わりに出す案内
-struct PlusLockedCard: View {
-    let title: String
-    @State private var showPlus = false
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "lock.fill").font(.title2).foregroundColor(.dlPrimary)
-            Text(verbatim: title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).multilineTextAlignment(.center)
-            Text(verbatim: S("Our Music Plus で使えます", "Available with Our Music Plus"))
-                .font(.caption).foregroundColor(.dlTextSub)
-            Button(S("Plus について見る", "Learn About Plus")) { showPlus = true }
-                .buttonStyle(PrimaryButtonStyle())
-                .padding(.horizontal, 30)
-        }
-        .frame(maxWidth: .infinity)
-        .dlCard(padding: 24)
-        .sheet(isPresented: $showPlus) { PlusView() }
     }
 }

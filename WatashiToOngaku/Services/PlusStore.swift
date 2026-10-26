@@ -3,16 +3,13 @@ import StoreKit
 
 /// 「Our Music Plus」（自動更新サブスクリプション）の購入状態。
 /// 記録・フレンド・すべてのテーマカラーと背景・アイコン・月のプレイリストは無料。
-/// Plus では、1年のプレイリスト、期間の制限がないカスタムプレイリストが使える。
+/// Plus では、1年ぶん（年・年齢ごと）のプレイリストが使える。
 @MainActor
 final class PlusStore: ObservableObject {
     static let shared = PlusStore()
 
     static let productIDs = ["com.taigayanai.watashitoongaku.plus.monthly",
                              "com.taigayanai.watashitoongaku.plus.yearly"]
-
-    /// 無料で作れるカスタムプレイリストの長さ（日）
-    static let freeCustomPlaylistDays = 31
 
     @Published private(set) var isPlus: Bool
 
