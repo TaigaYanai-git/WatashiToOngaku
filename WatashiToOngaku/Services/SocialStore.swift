@@ -153,6 +153,12 @@ final class SocialStore: ObservableObject {
             try await publishFriendCode()
 
             state = .ready
+            // アプリを入れ直したら、iCloud に置いてある自分の投稿から記録を戻す（入れるたびに1回）
+            if !local.bool(forKey: "social_restoredOnce") {
+                let count = await restoreFromCloud()
+                print("[Social] iCloud から \(count) 日分の記録を戻しました")
+                local.set(true, forKey: "social_restoredOnce")
+            }
             step = "upload"
             await uploadAll()
             await refresh()
@@ -271,6 +277,44 @@ final class SocialStore: ObservableObject {
     private static func stamp(_ entry: SongEntry) -> String {
         [entry.songID, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)",
          entry.clipStart.map { "\($0)" } ?? "-"].joined(separator: "|")
+    }
+
+    /// iCloud に置いた自分の投稿から、この端末にない日の記録を戻す（アプリを入れ直したときなど）。
+    /// 共有していなかった日と、フレンドに見せていなかったメモは iCloud にないので戻せない。戻した件数を返す
+    func restoreFromCloud() async -> Int {
+        guard state == .ready else { return 0 }
+        let context = AppContainer.shared.mainContext
+        var existing = Set(localEntries.map(\.dayKey))
+        let start = Calendar.current.date(byAdding: .year, value: -3, to: Date()) ?? Date()
+        let ids = Self.dayKeys(from: start, to: Date()).filter { !existing.contains($0) }.map { postID(secret: secret, dayKey: $0) }
+        var stamps = uploadedStamps
+        var restored = 0
+        for chunk in ids.chunked(200) {
+            guard let found = try? await publicDB.records(for: chunk) else { continue }
+            for case let (_, .success(record)) in found {
+                guard let dayKey = record["dayKey"] as? String, !existing.contains(dayKey) else { continue }
+                let entry = SongEntry(dayKey: dayKey, song: PickedSong(
+                    id: record["songID"] as? String ?? "",
+                    title: record["title"] as? String ?? "",
+                    artist: record["artist"] as? String ?? "",
+                    albumTitle: record["albumTitle"] as? String ?? "",
+                    artworkURL: record["artworkURL"] as? String ?? "",
+                    previewURL: record["previewURL"] as? String,
+                    appleMusicURL: record["appleMusicURL"] as? String,
+                    clipStart: record["clipStart"] as? Double))
+                entry.memo = record["memo"] as? String ?? ""
+                entry.createdAt = record["postedAt"] as? Date ?? record.creationDate ?? Date()
+                entry.updatedAt = entry.createdAt
+                context.insert(entry)
+                existing.insert(dayKey)
+                // iCloud と同じ内容なので、置き直さない
+                stamps[dayKey] = Self.stamp(entry)
+                restored += 1
+            }
+        }
+        try? context.save()
+        uploadedStamps = stamps
+        return restored
     }
 
     /// すべての記録を置く（月・年のプレイリストでフレンドが過去の曲も聴けるように）。

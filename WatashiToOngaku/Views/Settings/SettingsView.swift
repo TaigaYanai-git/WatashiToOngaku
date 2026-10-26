@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var showPlus = false
     @State private var showManageSubscription = false
     @State private var showBlocked = false
+    @State private var restoring = false
+    @State private var restoreMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -294,9 +296,27 @@ struct SettingsView: View {
     private var friendsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(S("フレンド", "Friends"))
-            row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
-                detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)")) {
-                showBlocked = true
+            VStack(spacing: 10) {
+                row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
+                    detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)")) {
+                    showBlocked = true
+                }
+                // アプリを入れ直したときなどに、フレンドに共有した曲から記録を戻す
+                row(icon: "icloud.and.arrow.down", title: S("iCloud から曲を戻す", "Restore Songs from iCloud"),
+                    detail: restoring ? S("戻しています…", "Restoring…") : "") {
+                    guard !restoring else { return }
+                    restoring = true
+                    Task {
+                        let count = await social.restoreFromCloud()
+                        restoring = false
+                        restoreMessage = count > 0
+                            ? S("\(count)日分の曲を戻しました", "Restored songs for \(count) days")
+                            : S("戻せる曲はありませんでした。フレンドに共有した日の曲だけ戻せます", "Nothing to restore. Only songs shared with friends can be restored")
+                    }
+                }
+            }
+            .alert(Text(verbatim: restoreMessage ?? ""), isPresented: Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } })) {
+                Button("OK", role: .cancel) {}
             }
         }
     }
