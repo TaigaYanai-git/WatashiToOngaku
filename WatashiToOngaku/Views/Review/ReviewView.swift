@@ -130,12 +130,6 @@ struct ReviewView: View {
             .navigationBarTitleDisplayMode(.inline)
             .appNavBarBackground()
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button { showShare = true } label: { Image(systemName: "square.and.arrow.up") }
-                        .foregroundColor(.dlPrimary)
-                        .disabled(periodEntries.isEmpty)
-                        .accessibilityLabel(S("シェア画像を作る", "Create Share Image"))
-                }
                 // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する（年・年齢は Plus）
                 ToolbarItem(placement: .navigationBarTrailing) {
                     musicButton(id: "order", label: S("上から再生", "Play in Order")) { PlayFromTopIcon() } action: {
@@ -297,9 +291,22 @@ struct ReviewView: View {
 
     private var topArtists: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(S("よく選んだアーティスト", "Top Artists"), systemImage: "crown")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.dlTextSub)
+            HStack {
+                Label(S("よく選んだアーティスト", "Top Artists"), systemImage: "crown")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.dlTextSub)
+                Spacer()
+                // この期間のジャケットとよく選んだアーティストを、シェア画像にする
+                Button { showShare = true } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.dlPrimary)
+                        .frame(width: 32, height: 32)
+                        .background(Color.dlPrimaryBg)
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel(S("シェア画像を作る", "Create Share Image"))
+            }
             ForEach(Array(SongStats.topArtists(periodEntries).enumerated()), id: \.element.id) { rank, item in
                 HStack(spacing: 12) {
                     Text("\(rank + 1)")
