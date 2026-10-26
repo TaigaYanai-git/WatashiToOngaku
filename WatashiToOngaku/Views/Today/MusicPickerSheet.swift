@@ -18,6 +18,8 @@ struct MusicPickerSheet: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var searchErrorMessage: String?
+    /// 選んだ曲。流す30秒を選ぶ画面に進む
+    @State private var picked: PickedSong?
     @ObservedObject private var player = PreviewPlayer.shared
 
     var body: some View {
@@ -42,6 +44,12 @@ struct MusicPickerSheet: View {
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: S("曲名やアーティスト名で検索", "Search songs or artists"))
             .onChange(of: searchText) { _, newValue in scheduleSearch(newValue) }
+            .navigationDestination(item: $picked) { song in
+                ClipRangeView(song: song) { final in
+                    onSelect(final)
+                    dismiss()
+                }
+            }
         }
         .onDisappear { player.stop() }
     }
@@ -187,7 +195,7 @@ struct MusicPickerSheet: View {
 
     private func select(_ song: Song) {
         player.stop()
-        onSelect(PickedSong(
+        picked = PickedSong(
             id: song.id.rawValue,
             title: song.title,
             artist: song.artistName,
@@ -196,7 +204,6 @@ struct MusicPickerSheet: View {
             previewURL: song.previewAssets?.first?.url?.absoluteString,
             appleMusicURL: song.url?.absoluteString,
             duration: song.duration ?? 0
-        ))
-        dismiss()
+        )
     }
 }

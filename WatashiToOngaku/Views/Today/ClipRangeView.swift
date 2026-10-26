@@ -1,13 +1,12 @@
 import MusicKit
 import SwiftUI
 
-/// 今日の一曲で流す30秒の範囲を選ぶ。
+/// 曲を選ぶときに、流す30秒の範囲を選ぶ（MusicPickerSheet から開く）。
 /// 曲の好きな位置から流すには Apple Music の契約が必要（契約していない人には Apple の試聴区間が流れる）
-struct ClipRangeSheet: View {
-    let entry: SongEntry
-    let onSave: (_ clipStart: Double?, _ duration: Double) -> Void
+struct ClipRangeView: View {
+    let song: PickedSong
+    let onDone: (PickedSong) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var player = PreviewPlayer.shared
     @State private var duration: Double
     @State private var start: Double
@@ -18,76 +17,74 @@ struct ClipRangeSheet: View {
 
     private static let auditionID = "clip-audition"
 
-    init(entry: SongEntry, onSave: @escaping (_ clipStart: Double?, _ duration: Double) -> Void) {
-        self.entry = entry
-        self.onSave = onSave
-        _duration = State(initialValue: entry.duration)
-        _start = State(initialValue: entry.clipStart ?? 0)
-        _useApplePreview = State(initialValue: entry.clipStart == nil)
+    init(song: PickedSong, onDone: @escaping (PickedSong) -> Void) {
+        self.song = song
+        self.onDone = onDone
+        _duration = State(initialValue: song.duration)
+        _start = State(initialValue: song.clipStart ?? 0)
+        _useApplePreview = State(initialValue: song.clipStart == nil)
     }
 
     private var maxStart: Double { max(0, duration - PreviewPlayer.clipLength) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    HStack(spacing: 14) {
-                        ArtworkView(url: entry.artworkURL, cornerRadius: 12).frame(width: 64, height: 64)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.title).font(.headline).foregroundColor(.dlText).lineLimit(2)
-                            Text(entry.artist).font(.subheadline).foregroundColor(.dlTextSub).lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
+        ScrollView {
+            VStack(spacing: 18) {
+                HStack(spacing: 14) {
+                    ArtworkView(url: song.artworkURL, cornerRadius: 12).frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(song.title).font(.headline).foregroundColor(.dlText).lineLimit(2)
+                        Text(song.artist).font(.subheadline).foregroundColor(.dlTextSub).lineLimit(1)
                     }
-                    .dlCard()
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        Picker("", selection: $useApplePreview) {
-                            Text(verbatim: S("好きな30秒", "Choose 30 sec")).tag(false)
-                            Text(verbatim: S("Apple の試聴区間", "Apple Preview")).tag(true)
-                        }
-                        .pickerStyle(.segmented)
-
-                        if useApplePreview {
-                            Text(verbatim: S("Apple Music が用意した試聴用の約30秒を流します。",
-                                             "Plays the ~30 second preview chosen by Apple Music."))
-                                .font(.caption).foregroundColor(.dlTextSub)
-                        } else if duration <= 0 {
-                            ProgressView().tint(.dlPrimary).frame(maxWidth: .infinity)
-                        } else {
-                            rangePicker
-                        }
-                    }
-                    .dlCard()
-
-                    if canPlayFull == false && !useApplePreview {
-                        subscriptionNote
-                    }
-
-                    Button(S("保存", "Save")) {
-                        player.stop()
-                        onSave(useApplePreview ? nil : min(start, maxStart), duration)
-                        dismiss()
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(!useApplePreview && duration <= 0)
+                    Spacer(minLength: 0)
                 }
-                .padding(20)
-            }
-            .background(DlBackground().ignoresSafeArea())
-            .navigationTitle(Text(verbatim: S("流す30秒を選ぶ", "Choose the 30 Seconds")))
-            .navigationBarTitleDisplayMode(.inline)
-            .appNavBarBackground()
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(S("キャンセル", "Cancel")) { player.stop(); dismiss() }.foregroundColor(.dlTextSub)
+                .dlCard()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(verbatim: S("流す30秒", "The 30 Seconds to Play"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.dlText)
+                    Picker("", selection: $useApplePreview) {
+                        Text(verbatim: S("Apple の試聴区間", "Apple Preview")).tag(true)
+                        Text(verbatim: S("好きな30秒", "Choose 30 sec")).tag(false)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if useApplePreview {
+                        Text(verbatim: S("Apple Music が用意した試聴用の約30秒を流します。",
+                                         "Plays the ~30 second preview chosen by Apple Music."))
+                            .font(.caption).foregroundColor(.dlTextSub)
+                    } else if duration <= 0 {
+                        ProgressView().tint(.dlPrimary).frame(maxWidth: .infinity)
+                    } else {
+                        rangePicker
+                    }
                 }
+                .dlCard()
+
+                if canPlayFull == false && !useApplePreview {
+                    subscriptionNote
+                }
+
+                Button(S("この曲にする", "Choose This Song")) {
+                    player.stop()
+                    var picked = song
+                    picked.duration = duration
+                    picked.clipStart = useApplePreview ? nil : min(start, maxStart)
+                    onDone(picked)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!useApplePreview && duration <= 0)
             }
-            .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
-            .task { await load() }
-            .onDisappear { player.stop() }
+            .padding(20)
         }
+        .background(DlBackground().ignoresSafeArea())
+        .navigationTitle(Text(verbatim: S("流す30秒を選ぶ", "Choose the 30 Seconds")))
+        .navigationBarTitleDisplayMode(.inline)
+        .appNavBarBackground()
+        .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
+        .task { await load() }
+        .onDisappear { player.stop() }
     }
 
     private var rangePicker: some View {
@@ -150,8 +147,8 @@ struct ClipRangeSheet: View {
     }
 
     private func audition() {
-        player.play(id: Self.auditionID, url: entry.previewURL.flatMap(URL.init(string:)),
-                    songID: entry.songID, clipStart: min(start, maxStart))
+        player.play(id: Self.auditionID, url: song.previewURL.flatMap(URL.init(string:)),
+                    songID: song.id, clipStart: min(start, maxStart))
     }
 
     /// 曲の長さと契約を調べる
@@ -163,11 +160,11 @@ struct ClipRangeSheet: View {
         } else {
             canPlayFull = false
         }
-        if duration <= 0, !entry.songID.hasPrefix("sample") {
-            let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(entry.songID))
+        if duration <= 0, !song.id.hasPrefix("sample") {
+            let request = MusicCatalogResourceRequest<Song>(matching: \.id, equalTo: MusicItemID(song.id))
             duration = (try? await request.response().items.first?.duration) ?? 0
         }
-        if entry.songID.hasPrefix("sample") { duration = 200 }
+        if song.id.hasPrefix("sample") { duration = 200 }
     }
 
     static func time(_ seconds: Double) -> String {

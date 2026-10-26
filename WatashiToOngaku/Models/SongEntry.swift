@@ -44,7 +44,7 @@ final class SongEntry {
         previewURL = song.previewURL
         appleMusicURL = song.appleMusicURL
         duration = song.duration
-        clipStart = nil
+        clipStart = song.clipStart
         updatedAt = Date()
     }
 
@@ -52,7 +52,7 @@ final class SongEntry {
 }
 
 /// 検索結果から選んだ曲（MusicKit の型に依存しない形で受け渡す）
-struct PickedSong: Equatable {
+struct PickedSong: Hashable {
     let id: String
     let title: String
     let artist: String
@@ -61,6 +61,8 @@ struct PickedSong: Equatable {
     let previewURL: String?
     let appleMusicURL: String?
     var duration: Double = 0
+    /// 流す30秒の始まり（秒）。nil なら Apple の試聴区間
+    var clipStart: Double?
 }
 
 enum DayKey {
