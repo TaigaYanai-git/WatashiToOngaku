@@ -36,8 +36,27 @@ THEMES = {
 }
 
 
+PHI = (1 + 5 ** 0.5) / 2
+
+
+def golden_records(size=1024):
+    """2枚のレコードを黄金比で置く。
+    - 手前の盤：アイコンの中央。直径 = アイコンの幅 ÷ φ
+    - 奥の盤：直径 = 手前の直径 ÷ φ。中心の高さはアイコンの上から 1/φ² のところ（黄金分割の線）
+    - 奥の盤は、中心を結ぶ線の上で「手前に隠れる部分 : 見える部分 = φ : 1」になるよう右にずらす
+    """
+    c = size / 2
+    front = size / PHI / 2
+    back = front / PHI
+    visible = 2 * back / PHI ** 2
+    distance = front + visible - back
+    dy = c - size / PHI ** 2
+    dx = (distance ** 2 - dy ** 2) ** 0.5
+    return [("", (c, c), front), ("back-", (round(c + dx, 1), round(c - dy, 1)), round(back, 1))]
+
+
 # 2枚のレコード：(名前の前置き, 中心, 半径)。上のものほど手前
-RECORDS = [("", (512, 512), 285), ("back-", (680, 512), 270)]
+RECORDS = golden_records()
 # 奥の盤を背景の色にどれだけ寄せるか
 BACK_FADE = 0.42
 
@@ -73,10 +92,12 @@ def record_svgs(center, radius):
     shine = "".join(arc(r * k, start + flip, end + flip)
                     for flip in (0, 180) for r, start, end in ((280, -126, -166), (230, -123, -149)))
     grooves = svg(rings + "\n" + shine)
-    label_r, hole_r = 118 * k, 18 * k
-    label = svg(f'<path fill-rule="evenodd" fill="#ffffff" d="M{cx - label_r:.0f},{cy} a{label_r:.0f},{label_r:.0f} 0 1,0 '
-                f'{2 * label_r:.0f},0 a{label_r:.0f},{label_r:.0f} 0 1,0 -{2 * label_r:.0f},0 Z M{cx - hole_r:.0f},{cy} '
-                f'a{hole_r:.0f},{hole_r:.0f} 0 1,0 {2 * hole_r:.0f},0 a{hole_r:.0f},{hole_r:.0f} 0 1,0 -{2 * hole_r:.0f},0 Z"/>')
+    def ring(r):
+        # 円を2つの半円の弧で描く（直径と半径を同じ丸め方にして、形が崩れないようにする）
+        r = round(r, 1)
+        return f"M{cx - r:.1f},{cy} a{r},{r} 0 1,0 {2 * r:.1f},0 a{r},{r} 0 1,0 -{2 * r:.1f},0 Z"
+
+    label = svg(f'<path fill-rule="evenodd" fill="#ffffff" d="{ring(118 * k)} {ring(18 * k)}"/>')
     return {"disc": disc, "grooves": grooves, "label": label}
 
 
