@@ -113,17 +113,7 @@ final class ThemeStore: ObservableObject {
                     primary:    Color(red: 0.647, green: 0.482, blue: 0.878),
                     primaryEnd: Color(red: 0.800, green: 0.639, blue: 0.949),
                     primaryBg:  Color(red: 0.929, green: 0.882, blue: 0.984)),
-        // 後から足した色は、保存済みの番号がずれないよう最後に足す（表示の順番は displayAccents で決める）
-        ThemeAccent(id: 9, name: "ピンク",
-                    primary:    Color(red: 0.957, green: 0.420, blue: 0.718),
-                    primaryEnd: Color(red: 0.980, green: 0.635, blue: 0.835),
-                    primaryBg:  Color(red: 0.996, green: 0.902, blue: 0.953)),
     ]
-
-    /// 設定に並べる順番（ピンクはローズの隣）
-    static var displayAccents: [ThemeAccent] {
-        [0, 1, 2, 9, 3, 4, 5, 6, 7, 8].map { accents[$0] }
-    }
 
     /// accentIndex がこの値なら、カスタムカラー
     static var customIndex: Int { accents.count }
@@ -140,13 +130,7 @@ final class ThemeStore: ObservableObject {
     private init() {
         let ud = UserDefaults.standard
         // Default: ブラック (index 0); existing saved value respected
-        // ピンクを足す前はカスタムカラーが 9 だったので、カスタムを選んでいた人は新しい番号にする
-        var savedAccent = ud.integer(forKey: "dl_themeAccent")
-        if ud.integer(forKey: "dl_themeAccentVersion") < 2 {
-            if savedAccent == 9 { savedAccent = Self.customIndex }
-            ud.set(2, forKey: "dl_themeAccentVersion")
-        }
-        accentIndex = min(savedAccent, Self.customIndex)
+        accentIndex = min(ud.integer(forKey: "dl_themeAccent"), Self.customIndex)
         customColorHex = ud.string(forKey: "dl_customColor") ?? "#33999A"
         isDark = ud.bool(forKey: "dl_themeIsDark")
         // Default: 水玉 (1) for first launch; 0 only when explicitly saved

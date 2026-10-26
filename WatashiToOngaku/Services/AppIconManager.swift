@@ -9,7 +9,7 @@ enum AppIconManager {
     static let followsThemeKey = "icon_followsTheme"
 
     /// ThemeStore.accents と同じ並び。ブラック（0）は標準のアイコン
-    private static let themes = ["", "White", "Rose", "Coral", "Sunset", "Lemon", "Mint", "Sky", "Lavender", "Pink"]
+    private static let themes = ["", "White", "Rose", "Coral", "Sunset", "Lemon", "Mint", "Sky", "Lavender"]
 
     static var followsTheme: Bool { UserDefaults.standard.bool(forKey: followsThemeKey) }
 
