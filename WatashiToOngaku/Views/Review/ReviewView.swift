@@ -127,7 +127,8 @@ struct ReviewView: View {
             }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: S("ふりかえり", "Look Back")))
-            .navigationBarTitleDisplayMode(.inline)
+            // 右上にボタンが3つあって中央に置く余裕がないので、ボタンの下に大きな見出しとして出す
+            .navigationBarTitleDisplayMode(.large)
             .appNavBarBackground()
             .toolbar {
                 // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する（年・年齢は Plus）
