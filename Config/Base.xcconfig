@@ -8,9 +8,12 @@ DEVELOPMENT_TEAM =
 REPO_URL = https:/$()/github.com/TaigaYanai-git/WatashiToOngaku
 PRIVACY_POLICY_URL = https:/$()/taigayanai-git.github.io/WatashiToOngaku/privacy.html
 
-// AdMob（タイムラインの広告）。ここは Google の公式テスト用 ID。
-// 本番の ID は Config/Local.xcconfig に ADMOB_APP_ID / ADMOB_NATIVE_UNIT_ID として書く
+// AdMob（タイムラインの広告）。
+// 開発中（Debug）は Google の公式テスト用 ID を使う（本番の広告を自分で表示・タップするとポリシー違反になるため）。
+// App Store に出すビルド（Release）だけ、本番の ID を使う。
 ADMOB_APP_ID = ca-app-pub-3940256099942544~1458002511
 ADMOB_NATIVE_UNIT_ID = ca-app-pub-3940256099942544/3986624511
+ADMOB_APP_ID[config=Release] = ca-app-pub-4690773417940916~6972954991
+ADMOB_NATIVE_UNIT_ID[config=Release] = ca-app-pub-4690773417940916/3787766334
 
 #include? "Local.xcconfig"
