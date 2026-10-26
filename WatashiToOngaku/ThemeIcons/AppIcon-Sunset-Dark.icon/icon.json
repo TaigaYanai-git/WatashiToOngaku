@@ -63,6 +63,43 @@
               }
             }
           ]
+        },
+        {
+          "glass": false,
+          "image-name": "back-grooves.svg",
+          "name": "back-grooves",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "glass": true,
+          "image-name": "back-disc.svg",
+          "name": "back-disc",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          },
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.52780,0.31146,0.20474,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.52780,0.31146,0.20474,1.00000"
+              }
+            }
+          ]
         }
       ],
       "shadow": {
