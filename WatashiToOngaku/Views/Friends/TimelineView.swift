@@ -5,6 +5,8 @@ import SwiftUI
 struct TimelineView: View {
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var social = SocialStore.shared
+    @ObservedObject private var adStore = NativeAdStore.shared
+    @ObservedObject private var plus = PlusStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
     @State private var showProfile = false
@@ -115,9 +117,14 @@ struct TimelineView: View {
                     }
                     .padding(.top, 60)
                 }
-                ForEach(social.timeline) { post in
+                ForEach(Array(social.timeline.enumerated()), id: \.element.id) { index, post in
                     PostCard(post: post, isPlaying: isNowPlaying(post)) { reporting = post }
                         .id(post.id)
+                    // 投稿5件ごとに広告を挟む（Plus の人には出さない）
+                    if (index + 1) % NativeAdStore.interval == 0, !plus.isPlus,
+                       let ad = adStore.ad(forSlot: (index + 1) / NativeAdStore.interval - 1) {
+                        NativeAdCard(ad: ad)
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -125,6 +132,7 @@ struct TimelineView: View {
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
+        .task(id: social.timeline.count) { await adStore.load(forPosts: social.timeline.count) }
         // タイムラインの曲が流れている（一時停止中も）あいだは、下に操作バーを出す
         .safeAreaInset(edge: .bottom) {
             if let post = currentPost, let song = currentSong {

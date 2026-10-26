@@ -27,8 +27,10 @@ struct PlusView: View {
                                 S("1年ぶんの「今日の一曲」を、Apple Music のプレイリストで聴けます", "Listen to a whole year of your songs in Apple Music"))
                         benefit("gift", S("年齢ごとのプレイリスト", "Playlists by age"),
                                 S("誕生日を登録すると、その年齢の1年に選んだ曲をプレイリストで聴けます", "Add your birthday to listen to each year of your age as a playlist"))
+                        benefit("rectangle.slash", S("広告なし", "No ads"),
+                                S("タイムラインに広告が出なくなります", "Removes ads from your timeline"))
                         benefit("heart", S("開発を応援", "Support development"),
-                                S("広告なしで続けていくための力になります", "Helps keep the app ad-free"))
+                                S("アプリを続けていくための力になります", "Helps keep the app going"))
                     }
                     .dlCard()
                 }
