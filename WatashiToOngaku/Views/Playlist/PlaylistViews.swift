@@ -94,8 +94,8 @@ struct PlayFromTopIcon: View {
     var body: some View {
         HStack(spacing: 2) {
             // 矢印は縦に伸ばして長く、再生マークは小さめに
-            Image(systemName: "arrow.down").fontWeight(.semibold).scaleEffect(x: 1, y: 1.35)
-            Image(systemName: "play.fill").imageScale(.small)
+            Image(systemName: "arrow.down").fontWeight(.semibold).scaleEffect(x: 1, y: 1.15)
+            Image(systemName: "play.fill").scaleEffect(0.85)
         }
     }
 }
