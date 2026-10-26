@@ -96,7 +96,8 @@ struct PlayFromTopIcon: View {
             // 矢印は先端を短くしたいので自分で描く。大きさは同じ文字の大きさの SF Symbol に合わせる
             Image(systemName: "arrow.down").fontWeight(.semibold).hidden()
                 .overlay { DownArrow() }
-                .scaleEffect(x: 1, y: 1.15)
+                .scaleEffect(0.9)
+                .padding(.trailing, -2)
             Image(systemName: "play.fill").scaleEffect(0.85)
         }
     }

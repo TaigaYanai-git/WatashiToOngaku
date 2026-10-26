@@ -13,12 +13,14 @@ struct SettingsView: View {
     @ObservedObject private var plus = PlusStore.shared
     @State private var showPlus = false
     @State private var showManageSubscription = false
+    @State private var showBlocked = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     profileSection
+                    if social.state == .ready { friendsSection }
                     plusSection
                     themeSection
                     languageSection
@@ -33,6 +35,7 @@ struct SettingsView: View {
             .appNavBarBackground()
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
+            .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
         }
@@ -320,6 +323,18 @@ struct SettingsView: View {
             .cornerRadius(20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - フレンド
+
+    private var friendsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionTitle(S("フレンド", "Friends"))
+            row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
+                detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)")) {
+                showBlocked = true
+            }
         }
     }
 

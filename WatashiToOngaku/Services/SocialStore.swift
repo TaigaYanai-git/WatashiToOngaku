@@ -41,6 +41,8 @@ final class SocialStore: ObservableObject {
     @Published private(set) var incomingRequests: [PendingFriend] = []
     /// 自分が送って、承認を待っている申請
     @Published private(set) var outgoingRequests: [PendingFriend] = []
+    /// ブロックした人（設定のブロックリスト）
+    @Published private(set) var blockedUsers: [PendingFriend] = []
     @Published private(set) var timeline: [FriendPost] = []
     @Published private(set) var isRefreshing = false
     @Published var lastError: String?
@@ -101,7 +103,12 @@ final class SocialStore: ObservableObject {
     }
     private var blocked: Set<String> {
         get { Set(value("social_blocked") as? [String] ?? []) }
-        set { set(Array(newValue), "social_blocked") }
+        set { set(Array(newValue), "social_blocked"); updateBlockedUsers() }
+    }
+    /// ブロックした人のニックネーム（ブロックリストに出す。相手のコードはもう読めないことがあるので、ブロックしたときに控える）
+    private var blockedNames: [String: String] {
+        get { value("social_blockedNames") as? [String: String] ?? [:] }
+        set { set(newValue, "social_blockedNames") }
     }
     /// 自分のアイコン（128px の JPEG）。端末にも置いておき、コードを作り直したときにも付け直す
     private var myAvatarFile: URL {
@@ -118,6 +125,7 @@ final class SocialStore: ObservableObject {
     /// 起動時：以前フレンド機能を使っていたら、読み込んで更新する
     func start() async {
         cloud.synchronize()
+        updateBlockedUsers()
         guard let savedName = value("social_nickname") as? String, !savedName.isEmpty else {
             state = .notSetUp
             return
@@ -346,7 +354,7 @@ final class SocialStore: ObservableObject {
     func decline(_ request: PendingFriend, block: Bool) {
         incomingLinks.removeAll { $0.code == request.code }
         incomingRequests.removeAll { $0.code == request.code }
-        if block { blocked.insert(request.code) }
+        if block { self.block(request.code, nickname: request.nickname) }
     }
 
     /// 送った申請を取り消す（相手の郵便受けに置いた鍵も消す）
@@ -569,9 +577,26 @@ final class SocialStore: ObservableObject {
 
     // MARK: - フレンド解除・ブロック・通報
 
+    /// ブロックする：この人からの申請を受け取らない。フレンドだったときは remove で鍵を作り直すので、もう投稿も見られない
+    private func block(_ code: String, nickname: String) {
+        blockedNames[code] = nickname
+        blocked.insert(code)
+    }
+
+    /// ブロックを解除する。フレンドには戻らない（また申請してもらえば、承認してフレンドになれる）
+    func unblock(_ user: PendingFriend) {
+        blockedNames[user.code] = nil
+        blocked.remove(user.code)
+    }
+
+    private func updateBlockedUsers() {
+        let names = blockedNames
+        blockedUsers = blocked.map { PendingFriend(code: $0, nickname: names[$0] ?? $0) }.sorted { $0.nickname < $1.nickname }
+    }
+
     /// フレンドをやめる。自分の鍵とコードを作り直して、相手が読めないようにする
     func remove(_ friend: Friend, block: Bool) async {
-        if block { blocked.insert(friend.code) }
+        if block { self.block(friend.code, nickname: friend.nickname) }
         links.removeAll { $0.code == friend.code }
         friends.removeAll { $0.code == friend.code }
         timeline.removeAll { $0.friend.code == friend.code }
