@@ -23,7 +23,8 @@ final class NativeAdStore: NSObject, ObservableObject {
     /// 投稿の数に合わせて、足りない広告を読み込む
     func load(forPosts count: Int) async {
         let needed = min(Self.maxAds, count / Self.interval)
-        guard !PlusStore.shared.isPlus, ads.count < needed, loader?.isLoading != true, !Self.unitID.isEmpty else { return }
+        guard !PlusStore.shared.isPlus, ads.count < needed, loader?.isLoading != true, !Self.unitID.isEmpty,
+              !SocialStore.shared.isPreview else { return }
         if !started {
             started = true
             // 広告の識別子を使ってよいか聞く（許可されなくても、興味に合わせない広告が出る）

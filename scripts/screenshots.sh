@@ -20,13 +20,15 @@ xcrun simctl install "$DEVICE" build/screens/Build/Products/Debug-iphonesimulato
 shoot() {  # 名前 起動引数...
   local name=$1; shift
   xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" 2>/dev/null || true
-  xcrun simctl launch "$DEVICE" "$BUNDLE_ID" -uiPreview "$@" >/dev/null
+  # テーマカラーは THEME（ThemeStore.accents の番号）で選べる
+  xcrun simctl launch "$DEVICE" "$BUNDLE_ID" -uiPreview -dl_themeAccent "${THEME:-0}" -dl_bgPattern 1 "$@" >/dev/null
   sleep 3
   xcrun simctl io "$DEVICE" screenshot --type=png "$OUT/$name.png" >/dev/null
   echo "  $OUT/$name.png"
 }
 
 shoot 1_today -initialTab today
-shoot 2_calendar -initialTab calendar
-shoot 3_review -initialTab review
-shoot 4_settings -initialTab settings
+shoot 2_timeline -initialTab timeline
+shoot 3_calendar -initialTab calendar
+shoot 4_review -initialTab review
+shoot 5_settings -initialTab settings

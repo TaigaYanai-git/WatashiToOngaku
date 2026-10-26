@@ -535,7 +535,7 @@ final class SocialStore: ObservableObject {
     // MARK: - タイムライン
 
     func refresh() async {
-        guard state == .ready, !isRefreshing else { return }
+        guard state == .ready, !isRefreshing, !isPreview else { return }
         isRefreshing = true
         defer { isRefreshing = false }
         await processFriendRequests()
@@ -617,6 +617,27 @@ final class SocialStore: ObservableObject {
             day = calendar.date(byAdding: .day, value: 1, to: day)!
         }
         return keys
+    }
+
+    // MARK: - スクリーンショット用のサンプル
+
+    /// -uiPreview のときは iCloud に接続せず、サンプルのフレンドの投稿を出す
+    private(set) var isPreview = false
+
+    func loadPreview(entries: [SongEntry]) {
+        isPreview = true
+        nickname = "Sora"
+        friendCode = "SORA2345"
+        let people = [("Mio", "MIO23456"), ("Ken", "KEN23456"), ("Yui", "YUI23456")].map {
+            Friend(code: $0.1, nickname: $0.0, secret: "", avatarVersion: 0)
+        }
+        friends = people
+        let me = Friend(code: friendCode, nickname: nickname, secret: "", avatarVersion: 0, isMe: true)
+        // 新しい日付から、自分と3人のフレンドの投稿を交互に並べる
+        timeline = entries.sorted { $0.dayKey > $1.dayKey }.prefix(12).enumerated().map { index, entry in
+            FriendPost(entry: entry, me: index % 4 == 0 ? me : people[index % 3])
+        }
+        state = .ready
     }
 
     // MARK: - フレンド解除・ブロック・通報

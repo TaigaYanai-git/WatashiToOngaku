@@ -27,8 +27,13 @@ enum SampleData {
                 id: "sample-\(offset)", title: pick.0, artist: pick.1, albumTitle: "Sample Album",
                 artworkURL: "sample:\(index)", previewURL: nil, appleMusicURL: "https://music.apple.com/jp/"))
             entry.memo = offset == 0 ? "今日は朝から気分がよかったので、明るい曲にした。" : pick.2
+            // 投稿した時刻はその日の朝〜夜に散らす（「◯秒前」にならないように）
+            let hour = offset == 0 ? -1 : 8 + (offset * 5) % 13
+            entry.createdAt = calendar.date(byAdding: .hour, value: hour, to: calendar.startOfDay(for: offset == 0 ? Date() : day)) ?? day
+            if offset == 0 { entry.createdAt = Date().addingTimeInterval(-60 * 47) }
             context.insert(entry)
         }
         try? context.save()
+        SocialStore.shared.loadPreview(entries: (try? context.fetch(FetchDescriptor<SongEntry>())) ?? [])
     }
 }
