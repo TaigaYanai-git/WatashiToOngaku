@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showPlus = false
     @State private var showManageSubscription = false
     @State private var showBlocked = false
+    @State private var showColorPicker = false
 
     var body: some View {
         NavigationStack {
@@ -36,6 +37,14 @@ struct SettingsView: View {
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
+            .sheet(isPresented: $showColorPicker) {
+                ColorPickerSheet(color: theme.customColor) { color in
+                    theme.customColorHex = color.hexString
+                    theme.accentIndex = ThemeStore.customIndex
+                }
+                .ignoresSafeArea()
+                .presentationDetents([.medium, .large])
+            }
             .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
         }
@@ -188,20 +197,11 @@ struct SettingsView: View {
                 Image(systemName: selected ? "checkmark" : (plus.isPlus ? "plus" : "lock.fill"))
                     .font(.caption2.weight(.bold))
                     .foregroundColor(.white)
-                if plus.isPlus {
-                    // 色を選ぶ画面は ColorPicker に任せる（見た目は上の丸、タップだけ受ける）
-                    ColorPicker("", selection: Binding(
-                        get: { Color(theme.customColor) },
-                        set: { color in
-                            theme.customColorHex = UIColor(color).hexString
-                            theme.accentIndex = ThemeStore.customIndex
-                        }), supportsOpacity: false)
-                        .labelsHidden()
-                        .scaleEffect(1.6)
-                        .opacity(0.02)
-                } else {
-                    Button { showPlus = true } label: { Color.clear.frame(width: 36, height: 36) }
+                // Plus なら色を選ぶ画面、そうでなければ Plus の案内を開く
+                Button { if plus.isPlus { showColorPicker = true } else { showPlus = true } } label: {
+                    Color.clear.frame(width: 36, height: 36).contentShape(Circle())
                 }
+                .buttonStyle(.plain)
             }
             .frame(width: 36, height: 36)
             .scaleEffect(selected ? 1.12 : 1.0)
@@ -554,5 +554,32 @@ private struct ReminderSheet: View {
             ReminderStore.shared.cancelAll()
         }
         dismiss()
+    }
+}
+
+/// 好きな色を選ぶ画面（UIColorPickerViewController）。選ぶたびに onChange で知らせる
+private struct ColorPickerSheet: UIViewControllerRepresentable {
+    let color: UIColor
+    let onChange: (UIColor) -> Void
+
+    func makeUIViewController(context: Context) -> UIColorPickerViewController {
+        let picker = UIColorPickerViewController()
+        picker.selectedColor = color
+        picker.supportsAlpha = false
+        picker.title = S("カスタムカラー", "Custom Color")
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ picker: UIColorPickerViewController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
+
+    final class Coordinator: NSObject, UIColorPickerViewControllerDelegate {
+        let onChange: (UIColor) -> Void
+        init(onChange: @escaping (UIColor) -> Void) { self.onChange = onChange }
+
+        func colorPickerViewController(_ picker: UIColorPickerViewController, didSelect color: UIColor, continuously: Bool) {
+            onChange(color)
+        }
     }
 }
