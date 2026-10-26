@@ -1,3 +1,4 @@
+import MusicKit
 import SwiftData
 import SwiftUI
 
@@ -10,6 +11,15 @@ struct ReviewView: View {
     @State private var anchor = Date()
     @State private var showShare = false
     @ObservedObject private var plus = PlusStore.shared
+    /// Apple Music で流す・保存している最中（"order" / "shuffle" / "save"）
+    @State private var working: String?
+    @State private var musicError: String?
+    @State private var showOffer = false
+    @State private var savedName: String?
+    /// 再生ボタンで流し始めたら、流れている曲までスクロールして追いかける
+    @State private var followsPlayback = false
+    @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
+    @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
     enum Span: String, CaseIterable, Identifiable {
         case month, year
@@ -33,6 +43,7 @@ struct ReviewView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 18) {
                     Picker("", selection: $span) {
@@ -60,6 +71,20 @@ struct ReviewView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
+            // 選んだ曲が流れている（一時停止中も）あいだは、下に操作バーを出す
+            .safeAreaInset(edge: .bottom) {
+                if let entry = currentEntry, let song = currentSong {
+                    NowPlayingBar(artworkURL: entry.artworkURL, title: entry.title,
+                                  subtitle: "\(entry.artist) ・ \(entry.day.formatted(.dateTime.month(.defaultDigits).day()))",
+                                  isPlaying: song.isPlaying) { followsPlayback = true }
+                }
+            }
+            .onChange(of: currentSong) { _, _ in
+                guard followsPlayback, let entry = periodEntries.first(where: isNowPlaying) else { return }
+                withAnimation { proxy.scrollTo(entry.dayKey, anchor: .center) }
+            }
+            .onChange(of: prefix) { _, _ in savedName = nil }
+            }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: S("ふりかえり", "Look Back")))
             .navigationBarTitleDisplayMode(.inline)
@@ -73,6 +98,10 @@ struct ReviewView: View {
                 }
             }
             .sheet(isPresented: $showShare) { ShareCardSheet(title: periodTitle, entries: periodEntries) }
+            .alert(Text(verbatim: musicError ?? ""), isPresented: Binding(get: { musicError != nil }, set: { if !$0 { musicError = nil } })) {
+                Button("OK", role: .cancel) {}
+            }
+            .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
         }
     }
 
@@ -87,13 +116,85 @@ struct ReviewView: View {
                 Label(S("\(periodTitle)のプレイリスト", "\(periodTitle) Playlist"), systemImage: "music.note.list")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.dlTextSub)
-                PlaylistActions(songIDs: periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID),
-                                name: S("Our Music \(periodTitle)", "Our Music \(periodTitle)"),
-                                description: S("Our Music で選んだ、\(periodTitle)の今日の一曲", "My songs of the day in \(periodTitle), from Our Music"),
-                                key: "mine-\(prefix)")
+                // 「選んだ曲」の上から順に／シャッフルで流す。ライブラリには日付の順に保存する
+                HStack(spacing: 10) {
+                    musicButton("play.fill", S("上から再生", "Play"), id: "order", primary: true) {
+                        try await AppleMusicService.play(periodEntries.map(\.songID))
+                        followsPlayback = true
+                    }
+                    musicButton("shuffle", S("シャッフル", "Shuffle"), id: "shuffle") {
+                        try await AppleMusicService.play(periodEntries.map(\.songID), shuffle: true)
+                        followsPlayback = true
+                    }
+                }
+                musicButton("plus.square.on.square", S("ライブラリに保存", "Save to Library"), id: "save") {
+                    let name = S("Our Music \(periodTitle)", "Our Music \(periodTitle)")
+                    try await AppleMusicService.save(periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID), name: name,
+                                                     description: S("Our Music で選んだ、\(periodTitle)の今日の一曲",
+                                                                    "My songs of the day in \(periodTitle), from Our Music"),
+                                                     key: "mine-\(prefix)")
+                    savedName = name
+                }
+                if let savedName {
+                    Button {
+                        AppleMusicService.openMusicApp()
+                    } label: {
+                        Label(S("「\(savedName)」を保存しました。ミュージックで開く", "Saved \"\(savedName)\". Open Music"),
+                              systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.dlPrimary)
+                    }
+                }
             }
             .dlCard()
         }
+    }
+
+    private func musicButton(_ symbol: String, _ title: String, id: String, primary: Bool = false,
+                             action: @escaping () async throws -> Void) -> some View {
+        Button {
+            working = id
+            Task {
+                defer { working = nil }
+                do {
+                    try await action()
+                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                    showOffer = true
+                } catch {
+                    musicError = error.localizedDescription
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if working == id { ProgressView().tint(primary ? .white : .dlPrimary) } else { Image(systemName: symbol) }
+                Text(verbatim: title).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(primary ? .white : .dlPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(primary ? AnyShapeStyle(LinearGradient.dlPrimary) : AnyShapeStyle(Color.dlPrimaryBg))
+            .cornerRadius(14)
+        }
+        .disabled(working != nil)
+    }
+
+    /// ミュージックの今の曲（一時停止中も含む）
+    private var currentSong: NowPlayingSong? { NowPlayingSong.current(queue: musicQueue, state: musicState) }
+
+    private func matches(_ entry: SongEntry, _ song: NowPlayingSong?) -> Bool {
+        song?.matches(songID: entry.songID, title: entry.title, artist: entry.artist) ?? false
+    }
+
+    private func isNowPlaying(_ entry: SongEntry) -> Bool {
+        guard let song = currentSong, song.isPlaying else { return false }
+        return matches(entry, song)
+    }
+
+    /// 今の曲が自分の記録にあれば、その記録（表示中の期間を優先）
+    private var currentEntry: SongEntry? {
+        guard let song = currentSong else { return nil }
+        return periodEntries.first { matches($0, song) } ?? entries.first { matches($0, song) }
     }
 
     private var periodHeader: some View {
@@ -170,6 +271,7 @@ struct ReviewView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
             ForEach(periodEntries) { entry in
+                let playing = isNowPlaying(entry)
                 Button {
                     router.targetDate = entry.day
                     router.selectedTab = .today
@@ -186,13 +288,22 @@ struct ReviewView: View {
                             }
                         }
                         Spacer()
-                        Text(entry.day, format: .dateTime.month(.defaultDigits).day())
-                            .font(.caption.monospacedDigit())
-                            .foregroundColor(.dlTextSub)
+                        if playing {
+                            NowPlayingBadge()
+                        } else {
+                            Text(entry.day, format: .dateTime.month(.defaultDigits).day())
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.dlTextSub)
+                        }
                     }
+                    .padding(6)
+                    .background(playing ? Color.dlPrimaryBg : Color.clear)
+                    .cornerRadius(12)
+                    .padding(-6)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .id(entry.dayKey)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
