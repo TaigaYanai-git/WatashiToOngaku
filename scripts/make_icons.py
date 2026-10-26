@@ -40,20 +40,15 @@ PHI = (1 + 5 ** 0.5) / 2
 
 
 def golden_records(size=1024):
-    """2枚のレコードを黄金比で置く。
-    - 手前の盤：アイコンの中央。直径 = アイコンの幅 ÷ φ
-    - 奥の盤：直径 = 手前の直径 ÷ √φ。中心の高さはアイコンの上から 1/φ² のところ（黄金分割の線）
-    - 奥の盤は、中心を結ぶ線の上で「手前に隠れる部分 : 見える部分 = φ² : 1」になるよう右にずらす
-      （盤を大きくしても、アイコンの右端に寄りすぎないように）
+    """同じ大きさの2枚のレコードを黄金比で置く。
+    - 手前の盤：アイコンの中央。直径 = アイコンの幅 ÷ φ^1.5（2枚並べてもアイコンに収まる大きさ）
+    - 奥の盤：手前と同じ大きさで、真横（右）にずらす。
+      ずらす量は、横の線の上で「手前に隠れる部分 : 見える部分 = φ : 1」になるところ
     """
     c = size / 2
-    front = size / PHI / 2
-    back = front / PHI ** 0.5
-    visible = 2 * back / (1 + PHI ** 2)
-    distance = front + visible - back
-    dy = c - size / PHI ** 2
-    dx = (distance ** 2 - dy ** 2) ** 0.5
-    return [("", (c, c), front), ("back-", (round(c + dx, 1), round(c - dy, 1)), round(back, 1))]
+    radius = size / PHI ** 1.5 / 2
+    shift = 2 * radius / (1 + PHI)
+    return [("", (c, c), round(radius, 1)), ("back-", (round(c + shift, 1), c), round(radius, 1))]
 
 
 # 2枚のレコード：(名前の前置き, 中心, 半径)。上のものほど手前
