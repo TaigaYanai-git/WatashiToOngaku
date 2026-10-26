@@ -50,9 +50,18 @@ final class SocialStore: ObservableObject {
     private let local = UserDefaults.standard
     private let cloud = NSUbiquitousKeyValueStore.default
 
-    private func value(_ key: String) -> Any? { local.object(forKey: key) ?? cloud.object(forKey: key) }
+    /// 開発用：シミュレータでは iCloud の Key-Value を使わない。
+    /// 実機と同じ Apple アカウントでサインインしても、別の人としてフレンド機能を試せるようにする
+    #if DEBUG && targetEnvironment(simulator)
+    private let usesCloud = false
+    #else
+    private let usesCloud = true
+    #endif
+
+    private func value(_ key: String) -> Any? { local.object(forKey: key) ?? (usesCloud ? cloud.object(forKey: key) : nil) }
     private func set(_ value: Any?, _ key: String) {
         local.set(value, forKey: key)
+        guard usesCloud else { return }
         cloud.set(value, forKey: key)
         cloud.synchronize()
     }
