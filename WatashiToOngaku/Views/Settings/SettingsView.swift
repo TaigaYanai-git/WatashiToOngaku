@@ -421,9 +421,6 @@ struct SettingsView: View {
                 if let url = Bundle.main.urlSetting("PRIVACY_POLICY_URL") {
                     row(icon: "hand.raised", title: S("プライバシーポリシー", "Privacy Policy"), detail: "") { openURL(url) }
                 }
-                if let url = Bundle.main.urlSetting("REPO_URL") {
-                    row(icon: "chevron.left.forwardslash.chevron.right", title: S("ソースコード", "Source Code"), detail: "") { openURL(url) }
-                }
             }
             Link(destination: URL(string: "https://www.flaticon.com/free-icon/vinyl_812680")!) {
                 Text(verbatim: "Vinyl icon by Those Icons – Flaticon")

@@ -5,7 +5,6 @@
 BUNDLE_ID_PREFIX = com.example
 DEVELOPMENT_TEAM =
 
-REPO_URL = https:/$()/github.com/TaigaYanai-git/WatashiToOngaku
 PRIVACY_POLICY_URL = https:/$()/taigayanai-git.github.io/WatashiToOngaku/privacy.html
 
 // AdMob（タイムラインの広告）。
