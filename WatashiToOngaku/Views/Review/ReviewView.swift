@@ -21,6 +21,8 @@ struct ReviewView: View {
     @State private var musicError: String?
     @State private var showOffer = false
     @State private var savedName: String?
+    /// 保存する前に名前を決めるシート
+    @State private var naming = false
     @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
     @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
@@ -148,9 +150,18 @@ struct ReviewView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    musicButton(id: "save", label: S("ライブラリに保存", "Save to Library")) { Image(systemName: "plus.square.on.square") } action: {
+                    Button { naming = true } label: {
+                        if working == "save" { ProgressView().tint(.dlPrimary) } else { Image(systemName: "plus.square.on.square") }
+                    }
+                    .foregroundColor(.dlPrimary)
+                    .disabled(periodEntries.isEmpty || working != nil)
+                    .accessibilityLabel(S("ライブラリに保存", "Save to Library"))
+                }
+            }
+            .sheet(isPresented: $naming) {
+                PlaylistNameSheet(defaultName: S("Our Music \(periodTitle)", "Our Music \(periodTitle)"), songCount: periodEntries.count) { name in
+                    run("save") {
                         // ライブラリには日付の古い順に保存する
-                        let name = S("Our Music \(periodTitle)", "Our Music \(periodTitle)")
                         try await AppleMusicService.save(periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID), name: name,
                                                          description: S("Our Music で選んだ、\(periodTitle)の今日の一曲",
                                                                         "My songs of the day, \(periodTitle), from Our Music", "Our Music에서 고른 \(periodTitle)의 오늘의 한 곡"),
@@ -176,23 +187,27 @@ struct ReviewView: View {
     private func musicButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
                                          action: @escaping () async throws -> Void) -> some View {
         Button {
-            working = id
-            Task {
-                defer { working = nil }
-                do {
-                    try await action()
-                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
-                    showOffer = true
-                } catch {
-                    musicError = error.localizedDescription
-                }
-            }
+            run(id, action)
         } label: {
             if working == id { ProgressView().tint(.dlPrimary) } else { icon() }
         }
         .foregroundColor(.dlPrimary)
         .disabled(periodEntries.isEmpty || working != nil)
         .accessibilityLabel(label)
+    }
+
+    private func run(_ id: String, _ action: @escaping () async throws -> Void) {
+        working = id
+        Task {
+            defer { working = nil }
+            do {
+                try await action()
+            } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                showOffer = true
+            } catch {
+                musicError = error.localizedDescription
+            }
+        }
     }
 
     /// 年齢のタブで、誕生日がまだないとき

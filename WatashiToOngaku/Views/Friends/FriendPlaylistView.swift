@@ -30,6 +30,8 @@ struct FriendPlaylistView: View {
     @State private var savedName: String?
     @State private var showOffer = false
     @State private var showPlus = false
+    /// 保存する前に名前を決めるシート
+    @State private var naming = false
 
     private var calendar: Calendar { .current }
     private var list: TimelineList? { timelineLists.current(isPlus: plus.isPlus) }
@@ -106,6 +108,16 @@ struct FriendPlaylistView: View {
             }
             .task(id: "\(span.rawValue)-\(DayKey.string(from: range.start))-\(list?.id ?? "all")-\(plus.isPlus)") { await load() }
             .sheet(isPresented: $showPlus) { PlusView() }
+            .sheet(isPresented: $naming) {
+                PlaylistNameSheet(defaultName: playlistName, songCount: posts.count) { name in
+                    run("save") {
+                        try await AppleMusicService.save(posts.map(\.songID), name: name,
+                                                         description: S("Our Music でフレンドが選んだ曲", "Songs picked by friends on Our Music", "Our Music에서 친구들이 고른 곡"),
+                                                         key: "friends-\(list?.id ?? "all")-\(span.rawValue)-\(DayKey.string(from: range.start))")
+                        savedName = name
+                    }
+                }
+            }
             .alert(Text(verbatim: musicError ?? ""), isPresented: Binding(get: { musicError != nil }, set: { if !$0 { musicError = nil } })) {
                 Button("OK", role: .cancel) {}
             }
@@ -171,31 +183,34 @@ struct FriendPlaylistView: View {
             actionButton(id: "shuffle", label: S("シャッフル", "Shuffle", "셔플")) { Image(systemName: "shuffle") } action: {
                 try await AppleMusicService.play(posts.map(\.songID), shuffle: true)
             }
-            actionButton(id: "save", label: S("保存", "Save", "저장")) { Image(systemName: "plus.square.on.square") } action: {
-                let name = playlistName
-                try await AppleMusicService.save(posts.map(\.songID), name: name,
-                                                 description: S("Our Music でフレンドが選んだ曲", "Songs picked by friends on Our Music", "Our Music에서 친구들이 고른 곡"),
-                                                 key: "friends-\(list?.id ?? "all")-\(span.rawValue)-\(DayKey.string(from: range.start))")
-                savedName = name
+            actionButton(id: "save", label: S("保存", "Save", "저장")) { Image(systemName: "plus.square.on.square") } onTap: {
+                naming = true
             }
         }
     }
 
     private func actionButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
                                           action: @escaping () async throws -> Void) -> some View {
-        Button {
-            working = id
-            Task {
-                defer { working = nil }
-                do {
-                    try await action()
-                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
-                    showOffer = true
-                } catch {
-                    musicError = error.localizedDescription
-                }
+        actionButton(id: id, label: label, icon: icon) { run(id, action) }
+    }
+
+    private func run(_ id: String, _ action: @escaping () async throws -> Void) {
+        working = id
+        Task {
+            defer { working = nil }
+            do {
+                try await action()
+            } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                showOffer = true
+            } catch {
+                musicError = error.localizedDescription
             }
-        } label: {
+        }
+    }
+
+    private func actionButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
+                                          onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
             VStack(spacing: 4) {
                 if working == id { ProgressView().tint(.dlPrimary) } else { icon() }
                 Text(verbatim: label).font(.caption.weight(.semibold))
