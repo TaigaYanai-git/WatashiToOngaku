@@ -14,8 +14,11 @@ final class NativeAdStore: NSObject, ObservableObject {
     private static let maxAds = 5
 
     @Published private(set) var ads: [NativeAd] = []
+    /// 「今日の一曲」で曲を選ぶ前の画面の下に出す広告（タイムラインとは別に1つ持つ）
+    @Published private(set) var todayAd: NativeAd?
 
     private var loader: AdLoader?
+    private var todayLoader: AdLoader?
     private var started = false
 
     private static var unitID: String { Bundle.main.object(forInfoDictionaryKey: "AdMobNativeUnitID") as? String ?? "" }
@@ -25,20 +28,34 @@ final class NativeAdStore: NSObject, ObservableObject {
         let needed = min(Self.maxAds, count / Self.interval)
         guard !PlusStore.shared.isPlus, ads.count < needed, loader?.isLoading != true, !Self.unitID.isEmpty,
               !SocialStore.shared.isPreview else { return }
-        if !started {
-            started = true
-            // 広告の識別子を使ってよいか聞く（許可されなくても、興味に合わせない広告が出る）
-            if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
-                _ = await ATTrackingManager.requestTrackingAuthorization()
-            }
-            _ = await MobileAds.shared.start()
-        }
+        await startIfNeeded()
         let options = MultipleAdsAdLoaderOptions()
         options.numberOfAds = needed - ads.count
         let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: [options])
         loader.delegate = self
         self.loader = loader
         loader.load(Request())
+    }
+
+    /// 「今日の一曲」の広告を読み込む
+    func loadToday() async {
+        guard !PlusStore.shared.isPlus, todayAd == nil, todayLoader?.isLoading != true, !Self.unitID.isEmpty,
+              !SocialStore.shared.isPreview else { return }
+        await startIfNeeded()
+        let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: nil)
+        loader.delegate = self
+        todayLoader = loader
+        loader.load(Request())
+    }
+
+    private func startIfNeeded() async {
+        guard !started else { return }
+        started = true
+        // 広告の識別子を使ってよいか聞く（許可されなくても、興味に合わせない広告が出る）
+        if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+            _ = await ATTrackingManager.requestTrackingAuthorization()
+        }
+        _ = await MobileAds.shared.start()
     }
 
     /// slot 番目（0 から）の枠に出す広告
@@ -50,7 +67,14 @@ final class NativeAdStore: NSObject, ObservableObject {
 
 extension NativeAdStore: NativeAdLoaderDelegate {
     nonisolated func adLoader(_ adLoader: AdLoader, didReceive nativeAd: NativeAd) {
-        Task { @MainActor in self.ads.append(nativeAd) }
+        let source = ObjectIdentifier(adLoader)
+        Task { @MainActor in
+            if let todayLoader = self.todayLoader, ObjectIdentifier(todayLoader) == source {
+                self.todayAd = nativeAd
+            } else {
+                self.ads.append(nativeAd)
+            }
+        }
     }
 
     nonisolated func adLoader(_ adLoader: AdLoader, didFailToReceiveAdWithError error: Error) {
