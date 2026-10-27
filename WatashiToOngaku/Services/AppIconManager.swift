@@ -28,7 +28,8 @@ enum AppIconManager {
         let ud = UserDefaults.standard
         if let theme { ud.set(theme, forKey: fixedThemeKey) } else { ud.removeObject(forKey: fixedThemeKey) }
         ud.set(isDark, forKey: fixedDarkKey)
-        apply()
+        // 固定をやめたときは、今のアイコンのままにする（次にテーマやダークモードを変えたときから合わせる）
+        if theme != nil { apply() }
     }
 
     /// テーマの番号とダークかどうかから、アイコンの名前（標準のアイコンなら nil）
