@@ -48,7 +48,14 @@ final class PlusStore: ObservableObject {
         #if DEBUG
         active = active || debugOverride
         #endif
+        let changed = isPlus != active
         isPlus = active
         UserDefaults.standard.set(active, forKey: "plus_active")
+        if !active, ThemeStore.shared.isCustom {
+            // Plus が終わったら、カスタムカラーからブラックに戻す
+            ThemeStore.shared.accentIndex = 0
+        }
+        // 固定していたアイコンは Plus のときだけ効くので、Plus が始まった・終わったら付け直す
+        if changed { AppIconManager.apply() }
     }
 }

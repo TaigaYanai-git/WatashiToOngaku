@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
     @AppStorage(AppIconManager.followsThemeKey) private var iconFollowsTheme = false
+    @State private var showIconPicker = false
     @ObservedObject private var plus = PlusStore.shared
     @State private var showPlus = false
     @State private var showManageSubscription = false
@@ -95,10 +96,17 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    customColorSwatch
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
             }
+            Text(verbatim: S("カスタム（Plus）の色は、アプリのアイコンには反映されません",
+                             "Custom colors (Plus) aren't applied to the app icon",
+                             "사용자 지정 색상（Plus）은 앱 아이콘에는 반영되지 않습니다"))
+                .font(.caption2)
+                .foregroundColor(.dlTextSub)
+                .padding(.horizontal, 20)
 
             // Background pattern picker
             VStack(alignment: .leading, spacing: 10) {
@@ -174,9 +182,74 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
             .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
+
+            // Plus：ダークモードやテーマカラーに左右されないアイコンに固定する
+            Button {
+                if plus.isPlus { showIconPicker = true } else { showPlus = true }
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10).fill(Color.dlPrimaryBg).frame(width: 36, height: 36)
+                        Image(systemName: "pin").font(.body).foregroundColor(.dlPrimary)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: S("アイコンを固定（Plus）", "Fix App Icon (Plus)", "아이콘 고정（Plus）"))
+                            .font(.subheadline)
+                            .foregroundColor(.dlText)
+                        Text(verbatim: S("ダークモードやテーマカラーを変えても、選んだアイコンのままにします",
+                                         "Keep the icon you choose, whatever the theme or dark mode",
+                                         "다크 모드나 테마 색상을 바꿔도 고른 아이콘을 유지합니다"))
+                            .font(.caption2)
+                            .foregroundColor(.dlTextSub)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Text(verbatim: AppIconManager.fixed == nil ? S("オフ", "Off", "끔") : S("オン", "On", "켬"))
+                        .font(.subheadline)
+                        .foregroundColor(.dlTextSub)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundColor(.dlTextLight)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color.dlCard)
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showIconPicker) { AppIconPickerSheet() }
             .onChange(of: theme.accentIndex) { _, index in AppIconManager.apply(accentIndex: index) }
             .onChange(of: theme.isDark) { _, isDark in AppIconManager.apply(isDark: isDark) }
         }
+    }
+
+    /// Plus：好きな色を選べるテーマカラー
+    private var customColorSwatch: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                if plus.isPlus {
+                    ColorPicker("", selection: Binding(
+                        get: { theme.customColor },
+                        set: { theme.customColor = $0; theme.accentIndex = ThemeStore.customIndex }
+                    ), supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 36, height: 36)
+                    .scaleEffect(theme.isCustom ? 1.12 : 1.0)
+                } else {
+                    Button { showPlus = true } label: {
+                        Circle()
+                            .fill(AngularGradient(colors: [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .red], center: .center))
+                            .frame(width: 36, height: 36)
+                            .overlay(Image(systemName: "lock.fill").font(.caption2.weight(.bold)).foregroundColor(.white))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text(verbatim: S("カスタム", "Custom", "사용자 지정"))
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(theme.isCustom ? .dlPrimary : .dlTextSub)
+        }
+        .accessibilityLabel(S("カスタムカラー（Plus）", "Custom Color (Plus)", "사용자 지정 색상（Plus）"))
     }
 
     private func bgPatternButton(pattern: BgPattern) -> some View {

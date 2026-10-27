@@ -67,6 +67,13 @@ final class ThemeStore: ObservableObject {
     @Published var isDark: Bool {
         didSet { UserDefaults.standard.set(isDark, forKey: "dl_themeIsDark") }
     }
+    /// Plus のカスタムカラー（accentIndex が customIndex のとき使う）
+    @Published var customColor: Color {
+        didSet {
+            let c = UIColor(customColor).rgba
+            UserDefaults.standard.set([c.r, c.g, c.b], forKey: "dl_customColor")
+        }
+    }
     @Published var bgPatternIndex: Int {
         didSet { UserDefaults.standard.set(bgPatternIndex, forKey: "dl_bgPattern") }
     }
@@ -121,9 +128,25 @@ final class ThemeStore: ObservableObject {
                     primaryBg:  Color(red: 0.929, green: 0.882, blue: 0.984)),
     ]
 
-    var primary:    Color { Self.accents[accentIndex].primary }
-    var primaryEnd: Color { Self.accents[accentIndex].primaryEnd }
-    var primaryBg:  Color { Self.accents[accentIndex].primaryBg }
+    /// カスタムカラーを選んでいるときの accentIndex（以前の 9〜 とは重ならない値）
+    static let customIndex = 100
+    var isCustom: Bool { accentIndex == Self.customIndex }
+
+    private var accent: ThemeAccent {
+        isCustom ? Self.customAccent(customColor) : Self.accents[Self.accents.indices.contains(accentIndex) ? accentIndex : 0]
+    }
+    var primary:    Color { accent.primary }
+    var primaryEnd: Color { accent.primaryEnd }
+    var primaryBg:  Color { accent.primaryBg }
+
+    /// 選んだ色から、グラデーションの終わりと薄い背景の色を作る
+    static func customAccent(_ color: Color) -> ThemeAccent {
+        let c = UIColor(color).rgba
+        func mix(_ t: Double) -> Color {
+            Color(red: c.r + (1 - c.r) * t, green: c.g + (1 - c.g) * t, blue: c.b + (1 - c.b) * t)
+        }
+        return ThemeAccent(id: customIndex, name: "カスタム", primary: color, primaryEnd: mix(0.35), primaryBg: mix(0.86))
+    }
 
     var bgPattern: BgPattern { BgPattern(rawValue: bgPatternIndex) ?? .none }
 
@@ -132,7 +155,9 @@ final class ThemeStore: ObservableObject {
         // Default: ブラック (index 0); existing saved value respected
         // 以前のカスタムカラー（9 以上）を選んでいた人はブラックに戻す
         let savedAccent = ud.integer(forKey: "dl_themeAccent")
-        accentIndex = Self.accents.indices.contains(savedAccent) ? savedAccent : 0
+        accentIndex = Self.accents.indices.contains(savedAccent) || savedAccent == Self.customIndex ? savedAccent : 0
+        let rgb = ud.array(forKey: "dl_customColor") as? [Double] ?? [0.45, 0.55, 0.9]
+        customColor = rgb.count == 3 ? Color(red: rgb[0], green: rgb[1], blue: rgb[2]) : Color(red: 0.45, green: 0.55, blue: 0.9)
         isDark = ud.bool(forKey: "dl_themeIsDark")
         // Default: 水玉 (1) for first launch; 0 only when explicitly saved
         bgPatternIndex = ud.object(forKey: "dl_bgPattern") != nil
@@ -145,5 +170,14 @@ final class ThemeStore: ObservableObject {
             language = sys.hasPrefix("en") ? "en" : sys.hasPrefix("ko") ? "ko" : "ja"
         }
         UserDefaults.standard.set([language], forKey: "AppleLanguages")
+    }
+}
+
+extension UIColor {
+    /// sRGB の成分（0〜1）
+    var rgba: (r: Double, g: Double, b: Double, a: Double) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(min(max(r, 0), 1)), Double(min(max(g, 0), 1)), Double(min(max(b, 0), 1)), Double(a))
     }
 }

@@ -35,6 +35,10 @@ struct PlusView: View {
                                 S("1か月や1年のあいだにフレンドが選んだ曲を、Apple Music でまとめて聴けます",
                                   "Listen to a month or a year of your friends' songs in Apple Music",
                                   "한 달, 1년 동안 친구들이 고른 곡을 Apple Music으로 모아 들을 수 있습니다"))
+                        benefit("paintpalette", S("カスタムカラーとアイコンの固定", "Custom colors & a fixed app icon", "사용자 지정 색상과 아이콘 고정"),
+                                S("テーマカラーを好きな色にできます（アイコンには反映されません）。アイコンはダークモードやテーマに左右されないものに固定できます",
+                                  "Pick any theme color (not applied to the icon), and keep an icon that doesn't change with dark mode or theme",
+                                  "테마 색상을 원하는 색으로 바꿀 수 있습니다（아이콘에는 반영되지 않음）. 아이콘은 다크 모드나 테마와 상관없이 고정할 수 있습니다"))
                         benefit("rectangle.slash", S("広告なし", "No ads", "광고 없음"),
                                 S("タイムラインと今日の一曲に広告が出なくなります", "Removes ads from the timeline and Today", "타임라인과 오늘의 한 곡에 광고가 표시되지 않습니다"))
                     }
