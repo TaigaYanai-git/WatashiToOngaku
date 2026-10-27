@@ -1,6 +1,6 @@
 import Foundation
 
-/// フレンドを分けて見るタイムライン（Plus）。「すべて」のほかに、入れるフレンドを選んだタイムラインを作れる。
+/// フレンドを分けて見るタイムライン（Plus）。「みんな」のほかに、入れるフレンドを選んだタイムラインを作れる。
 /// 投稿の取り出し方は変えず、端末内で絞り込むだけなので、iCloud の読み書きは増えない
 struct TimelineList: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
@@ -13,15 +13,15 @@ struct TimelineList: Codable, Identifiable, Hashable {
 final class TimelineListStore: ObservableObject {
     static let shared = TimelineListStore()
 
-    /// 「すべて」を含めて持てるタイムラインの数
+    /// 「みんな」を含めて持てるタイムラインの数
     static let maxCount = 5
-    /// 「すべて」のタイムライン（選んでいないときもこれ）
+    /// 「みんな」のタイムライン（選んでいないときもこれ）
     static let allID = "all"
 
     private static let listsKey = "timeline_lists"
     private static let selectedKey = "timeline_selected"
 
-    /// 自分で作ったタイムライン（「すべて」は含まない）
+    /// 自分で作ったタイムライン（「みんな」は含まない）
     @Published private(set) var lists: [TimelineList] = []
     @Published var selectedID: String = TimelineListStore.allID {
         didSet { UserDefaults.standard.set(selectedID, forKey: Self.selectedKey) }
@@ -37,7 +37,7 @@ final class TimelineListStore: ObservableObject {
 
     var canAddMore: Bool { lists.count < Self.maxCount - 1 }
 
-    /// 今選んでいるタイムライン。Plus でなくなったら（作ったものは残したまま）「すべて」を見せる
+    /// 今選んでいるタイムライン。Plus でなくなったら（作ったものは残したまま）「みんな」を見せる
     func current(isPlus: Bool) -> TimelineList? {
         guard isPlus else { return nil }
         return lists.first { $0.id == selectedID }

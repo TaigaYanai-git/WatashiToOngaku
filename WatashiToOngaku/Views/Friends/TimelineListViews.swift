@@ -10,7 +10,7 @@ struct TimelineListBar: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                chip(S("すべて", "All", "전체"), id: TimelineListStore.allID)
+                chip(S("みんな", "Everyone", "모두"), id: TimelineListStore.allID)
                 if plus.isPlus {
                     ForEach(store.lists) { list in
                         chip(list.name, id: list.id)

@@ -238,7 +238,7 @@ struct TimelineView: View {
         return posts.filter { $0.dayKey >= firstKey }
     }
 
-    /// 今選んでいるタイムライン（「すべて」なら nil）
+    /// 今選んでいるタイムライン（「みんな」なら nil）
     private var selectedList: TimelineList? { timelineLists.current(isPlus: plus.isPlus) }
 
     /// 選んでいるタイムラインに出す投稿
