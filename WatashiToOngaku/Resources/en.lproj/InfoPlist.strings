@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Our Music";
+"NSAppleMusicUsageDescription" = "Our Music searches and previews songs with Apple Music so you can pick your song of the day.";
+"NSCameraUsageDescription" = "Used to scan your friends' QR codes.";
+"NSUserTrackingUsageDescription" = "Used to show ads that suit you. The app works the same if you don't allow it.";

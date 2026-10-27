@@ -91,7 +91,7 @@ struct TimelineView: View {
                     Button(reason, role: .destructive) { Task { await social.report(post, reason: reason) } }
                 }
             } message: { post in
-                Text(verbatim: S("開発者に知らせ、\(post.friend.nickname)さんをブロックします。", "We'll notify the developer and block \(post.friend.nickname)."))
+                Text(verbatim: S("開発者に知らせ、\(post.friend.nickname)さんをブロックします。", "We'll notify the developer and block \(post.friend.nickname).", "개발자에게 알리고 \(post.friend.nickname)님을 차단합니다."))
             }
         }
     }
@@ -226,7 +226,7 @@ private struct PostCard: View {
             HStack(spacing: 10) {
                 AvatarView(code: post.friend.code, version: post.friend.avatarVersion, nickname: post.friend.nickname)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)") : post.friend.nickname)
+                    Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)", "\(post.friend.nickname) (나)") : post.friend.nickname)
                         .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
                 }
@@ -279,7 +279,7 @@ private struct PostCard: View {
 
     private var dayText: String {
         guard let day = post.day else { return "" }
-        return S("\(day.formatted(.dateTime.month().day()))の一曲", "Song of \(day.formatted(.dateTime.month().day()))")
+        return S("\(day.formatted(.dateTime.month().day()))の一曲", "Song of \(day.formatted(.dateTime.month().day()))", "\(day.formatted(.dateTime.month().day()))의 한 곡")
     }
 }
 

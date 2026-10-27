@@ -94,7 +94,7 @@ struct ClipRangeView: View {
                     .font(.title3.weight(.bold).monospacedDigit())
                     .foregroundColor(.dlText)
                 Spacer()
-                Text(verbatim: S("全体 \(Self.time(duration))", "of \(Self.time(duration))"))
+                Text(verbatim: S("全体 \(Self.time(duration))", "of \(Self.time(duration))", "전체 \(Self.time(duration))"))
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.dlTextSub)
             }

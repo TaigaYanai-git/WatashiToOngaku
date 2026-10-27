@@ -47,7 +47,7 @@ struct BlockedUsersView: View {
                     Button(S("閉じる", "Close")) { dismiss() }.foregroundColor(.dlPrimary)
                 }
             }
-            .confirmationDialog(Text(verbatim: unblocking.map { S("\($0.nickname)さんのブロックを解除しますか？", "Unblock \($0.nickname)?") } ?? ""),
+            .confirmationDialog(Text(verbatim: unblocking.map { S("\($0.nickname)さんのブロックを解除しますか？", "Unblock \($0.nickname)?", "\($0.nickname)님의 차단을 해제할까요?") } ?? ""),
                                 isPresented: Binding(get: { unblocking != nil }, set: { if !$0 { unblocking = nil } }),
                                 titleVisibility: .visible, presenting: unblocking) { user in
                 Button(S("ブロックを解除", "Unblock")) { social.unblock(user) }

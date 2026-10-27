@@ -75,7 +75,7 @@ private struct ShareCard: View {
         VStack(spacing: 18) {
             VStack(spacing: 4) {
                 Text(verbatim: title).font(.system(size: 26, weight: .bold)).foregroundColor(.dlText)
-                Text(verbatim: S("\(count)曲の記録", "\(count) songs")).font(.system(size: 14)).foregroundColor(.dlTextSub)
+                Text(verbatim: S("\(count)曲の記録", "\(count) songs", "\(count)곡의 기록")).font(.system(size: 14)).foregroundColor(.dlTextSub)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(96), spacing: 8), count: 3), spacing: 8) {
                 ForEach(entries) { entry in

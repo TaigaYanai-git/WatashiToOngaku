@@ -42,6 +42,16 @@ enum BgPattern: Int, CaseIterable {
         case .hearts:  return "Hearts"
         }
     }
+    var labelKo: String {
+        switch self {
+        case .none:    return "없음"
+        case .dots:    return "물방울"
+        case .border:  return "줄무늬"
+        case .borderV: return "세로 줄무늬"
+        case .stars:   return "별"
+        case .hearts:  return "하트"
+        }
+    }
 }
 
 // MARK: - ThemeStore
@@ -132,7 +142,7 @@ final class ThemeStore: ObservableObject {
             language = saved
         } else {
             let sys = Locale.preferredLanguages.first ?? "ja"
-            language = sys.hasPrefix("en") ? "en" : "ja"
+            language = sys.hasPrefix("en") ? "en" : sys.hasPrefix("ko") ? "ko" : "ja"
         }
         UserDefaults.standard.set([language], forKey: "AppleLanguages")
     }

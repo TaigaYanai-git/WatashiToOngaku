@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Our Music";
+"NSAppleMusicUsageDescription" = "今日の一曲を選ぶために、Apple Music で曲を検索・試聴します。";
+"NSCameraUsageDescription" = "フレンドのQRコードを読み取るために使います。";
+"NSUserTrackingUsageDescription" = "あなたに合った広告を表示するために使います。許可しなくても、アプリはこれまでどおり使えます。";

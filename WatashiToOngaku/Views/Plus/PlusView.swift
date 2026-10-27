@@ -38,6 +38,7 @@ struct PlusView: View {
             }
             .background(DlBackground().ignoresSafeArea())
         }
+        .compactPlanPicker()
         .subscriptionStoreButtonLabel(.multiline)
         .subscriptionStorePolicyDestination(url: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!, for: .termsOfService)
         .subscriptionStorePolicyDestination(url: Bundle.main.urlSetting("PRIVACY_POLICY_URL") ?? URL(string: "https://www.apple.com/legal/privacy/")!, for: .privacyPolicy)
@@ -46,6 +47,8 @@ struct PlusView: View {
         .tint(.dlPrimary)
         .onInAppPurchaseCompletion { _, _ in await plus.refresh() }
         .onChange(of: plus.isPlus) { _, isPlus in if isPlus { dismiss() } }
+        // 「登録する」などの StoreKit の文言も、アプリで選んだ言語にそろえる
+        .environment(\.locale, Locale(identifier: S("ja_JP", "en_US", "ko_KR")))
     }
 
     private func benefit(_ symbol: String, _ title: String, _ detail: String) -> some View {
@@ -60,6 +63,18 @@ struct PlusView: View {
                 Text(verbatim: title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                 Text(verbatim: detail).font(.caption).foregroundColor(.dlTextSub)
             }
+        }
+    }
+}
+
+private extension View {
+    /// プランを横並びの小さな選択肢にして、上の Plus の説明が隠れないようにする（iOS 18 から）
+    @ViewBuilder
+    func compactPlanPicker() -> some View {
+        if #available(iOS 18.0, *) {
+            subscriptionStoreControlStyle(.compactPicker)
+        } else {
+            self
         }
     }
 }

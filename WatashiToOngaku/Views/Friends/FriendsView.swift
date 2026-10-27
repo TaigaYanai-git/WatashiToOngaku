@@ -44,7 +44,7 @@ struct FriendsView: View {
             .alert(Text(verbatim: message ?? ""), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") {}
             }
-            .confirmationDialog(Text(verbatim: removing.map { S("\($0.nickname)さん", $0.nickname) } ?? ""),
+            .confirmationDialog(Text(verbatim: removing.map { S("\($0.nickname)さん", $0.nickname, "\($0.nickname)님") } ?? ""),
                                 isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                                 titleVisibility: .visible, presenting: removing) { friend in
                 Button(S("フレンドをやめる", "Remove Friend"), role: .destructive) { Task { await social.remove(friend, block: false) } }
@@ -53,7 +53,7 @@ struct FriendsView: View {
                 Text(verbatim: S("お互いの曲が見えなくなります。ブロックすると、もう一度フレンドになることもできなくなります。",
                                  "You'll stop seeing each other's songs. Blocking also prevents becoming friends again."))
             }
-            .confirmationDialog(Text(verbatim: declining.map { S("\($0.nickname)さんからの申請", "Request from \($0.nickname)") } ?? ""),
+            .confirmationDialog(Text(verbatim: declining.map { S("\($0.nickname)さんからの申請", "Request from \($0.nickname)", "\($0.nickname)님의 신청") } ?? ""),
                                 isPresented: Binding(get: { declining != nil }, set: { if !$0 { declining = nil } }),
                                 titleVisibility: .visible, presenting: declining) { request in
                 Button(S("申請を断る", "Decline"), role: .destructive) { social.decline(request, block: false) }
@@ -83,7 +83,7 @@ struct FriendsView: View {
                     ShareLink(item: url,
                               subject: Text(verbatim: S("Our Music", "Our Music")),
                               message: Text(verbatim: S("「Our Music」でフレンドになろう！フレンドコード：\(social.friendCode)",
-                                                        "Be my friend on Our Music! Code: \(social.friendCode)"))) {
+                                                        "Be my friend on Our Music! Code: \(social.friendCode)", "Our Music에서 친구가 되어요! 친구 코드: \(social.friendCode)"))) {
                         Label(S("招待リンクを送る", "Send Invite"), systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(SecondaryButtonStyle())
@@ -130,7 +130,7 @@ struct FriendsView: View {
     /// 届いた申請。承認するとお互いの曲が見えるようになる
     private var incomingCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: S("フレンド申請（\(social.incomingRequests.count)件）", "Friend Requests (\(social.incomingRequests.count))"))
+            Text(verbatim: S("フレンド申請（\(social.incomingRequests.count)件）", "Friend Requests (\(social.incomingRequests.count))", "친구 신청 (\(social.incomingRequests.count)건)"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
             ForEach(social.incomingRequests) { request in
@@ -144,7 +144,7 @@ struct FriendsView: View {
                     Button(S("承認", "Accept")) {
                         Task {
                             message = await social.approve(request)
-                                ? S("\(request.nickname)さんとフレンドになりました！", "You and \(request.nickname) are now friends!")
+                                ? S("\(request.nickname)さんとフレンドになりました！", "You and \(request.nickname) are now friends!", "\(request.nickname)님과 친구가 되었습니다!")
                                 : (social.lastError ?? S("承認できませんでした", "Couldn't accept"))
                         }
                     }
@@ -186,7 +186,7 @@ struct FriendsView: View {
 
     private var friendList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: S("フレンド（\(social.friends.count)人）", "Friends (\(social.friends.count))"))
+            Text(verbatim: S("フレンド（\(social.friends.count)人）", "Friends (\(social.friends.count))", "친구 (\(social.friends.count)명)"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
             if social.friends.isEmpty {

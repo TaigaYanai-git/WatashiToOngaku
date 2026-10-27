@@ -88,7 +88,7 @@ struct SettingsView: View {
                                 .scaleEffect(theme.accentIndex == accent.id ? 1.12 : 1.0)
                                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: theme.accentIndex)
 
-                                Text(accent.name)
+                                Text(verbatim: S(accent.name, accent.name))
                                     .font(.system(size: 9, weight: .medium))
                                     .foregroundColor(theme.accentIndex == accent.id ? .dlPrimary : .dlTextSub)
                             }
@@ -181,7 +181,7 @@ struct SettingsView: View {
 
     private func bgPatternButton(pattern: BgPattern) -> some View {
         let selected = theme.bgPatternIndex == pattern.rawValue
-        let label = theme.language == "en" ? pattern.labelEn : pattern.label
+        let label = S(pattern.label, pattern.labelEn, pattern.labelKo)
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 theme.bgPatternIndex = pattern.rawValue
@@ -251,7 +251,7 @@ struct SettingsView: View {
 
     private var languageSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("言語 / Language")
+            Text(verbatim: "言語 / Language / 언어")
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
@@ -259,6 +259,7 @@ struct SettingsView: View {
             Picker("", selection: $theme.language) {
                 Text("日本語").tag("ja")
                 Text("English").tag("en")
+                Text("한국어").tag("ko")
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 20)
@@ -306,7 +307,7 @@ struct SettingsView: View {
             sectionTitle(S("フレンド", "Friends"))
             VStack(spacing: 10) {
                 row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
-                    detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)")) {
+                    detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)", "\(social.blockedUsers.count)명")) {
                     showBlocked = true
                 }
                 // アプリを入れ直したときなどに、フレンドに共有した曲から記録を戻す
@@ -318,7 +319,7 @@ struct SettingsView: View {
                         let count = await social.restoreFromCloud()
                         restoring = false
                         restoreMessage = count > 0
-                            ? S("\(count)日分の曲を戻しました", "Restored songs for \(count) days")
+                            ? S("\(count)日分の曲を戻しました", "Restored songs for \(count) days", "\(count)일분의 곡을 복원했습니다")
                             : S("戻せる曲はありませんでした。フレンドに共有した日の曲だけ戻せます", "Nothing to restore. Only songs shared with friends can be restored")
                     }
                 }

@@ -22,8 +22,21 @@ final class ReminderStore {
         "Which song stayed with you today?",
         "Record a song for today's mood",
     ]
+    private static let messagesKO = [
+        "오늘의 한 곡을 골라 보세요",
+        "오늘은 어떤 곡이 듣고 싶은 기분이었나요?",
+        "오늘을 한 곡으로 남겨 보지 않을래요?",
+        "오늘 가장 마음에 남은 곡은?",
+        "오늘 기분에 맞는 곡을 기록해 보세요",
+    ]
 
-    static var messages: [String] { ThemeStore.shared.language == "en" ? messagesEN : messagesJA }
+    static var messages: [String] {
+        switch ThemeStore.shared.language {
+        case "en": return messagesEN
+        case "ko": return messagesKO
+        default: return messagesJA
+        }
+    }
 
     var isEnabled: Bool {
         get { defaults.bool(forKey: "reminder_enabled") }

@@ -69,7 +69,7 @@ struct ReviewView: View {
         switch span {
         case .month: return anchor.formatted(.dateTime.year().month())
         case .year: return anchor.formatted(.dateTime.year())
-        case .age: return S("\(age)歳", "Age \(age)")
+        case .age: return S("\(age)歳", "Age \(age)", "\(age)세")
         }
     }
 
@@ -158,7 +158,7 @@ struct ReviewView: View {
                         let name = S("Our Music \(periodTitle)", "Our Music \(periodTitle)")
                         try await AppleMusicService.save(periodEntries.sorted { $0.dayKey < $1.dayKey }.map(\.songID), name: name,
                                                          description: S("Our Music で選んだ、\(periodTitle)の今日の一曲",
-                                                                        "My songs of the day, \(periodTitle), from Our Music"),
+                                                                        "My songs of the day, \(periodTitle), from Our Music", "Our Music에서 고른 \(periodTitle)의 오늘의 한 곡"),
                                                          key: playlistKey)
                         savedName = name
                     }
@@ -170,7 +170,7 @@ struct ReviewView: View {
             .alert(Text(verbatim: musicError ?? ""), isPresented: Binding(get: { musicError != nil }, set: { if !$0 { musicError = nil } })) {
                 Button("OK", role: .cancel) {}
             }
-            .alert(Text(verbatim: S("「\(savedName ?? "")」をライブラリに保存しました", "Saved \"\(savedName ?? "")\" to your library")),
+            .alert(Text(verbatim: S("「\(savedName ?? "")」をライブラリに保存しました", "Saved \"\(savedName ?? "")\" to your library", "'\(savedName ?? "")'을(를) 보관함에 저장했습니다")),
                    isPresented: Binding(get: { savedName != nil }, set: { if !$0 { savedName = nil } })) {
                 Button(S("ミュージックで開く", "Open Music")) { AppleMusicService.openMusicApp() }
                 Button("OK", role: .cancel) {}
