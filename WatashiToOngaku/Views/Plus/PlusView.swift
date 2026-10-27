@@ -17,8 +17,9 @@ struct PlusView: View {
                     Text(verbatim: S("Our Music Plus", "Our Music Plus"))
                         .font(.title2.weight(.bold))
                         .foregroundColor(.dlText)
-                    Text(verbatim: S("毎日の記録、フレンド、すべてのテーマカラーと背景は、これからも無料です。Plus では、音楽をもっと楽しむ機能が使えます。",
-                                     "Daily songs, friends and all theme colors stay free. Plus adds more ways to enjoy your music."))
+                    Text(verbatim: S("毎日の記録、フレンド、9色のテーマカラーと背景は、これからも無料です。Plus では、音楽をもっと楽しむ機能が使えます。",
+                                     "Daily songs, friends, the 9 theme colors and backgrounds stay free. Plus adds more ways to enjoy your music.",
+                                     "매일의 기록, 친구, 9가지 테마 색상과 배경은 앞으로도 무료입니다. Plus에서는 음악을 더 즐길 수 있는 기능을 사용할 수 있습니다."))
                         .font(.subheadline)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.center)

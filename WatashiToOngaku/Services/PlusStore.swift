@@ -2,8 +2,8 @@ import Combine
 import StoreKit
 
 /// 「Our Music Plus」（自動更新サブスクリプション）の購入状態。
-/// 記録・フレンド・すべてのテーマカラーと背景・アイコン・月のプレイリストは無料。
-/// Plus では、1年ぶん（年・年齢ごと）のプレイリストが使える。
+/// 記録・フレンド・9色のテーマカラーと背景・アイコン・自分のふりかえりのプレイリストは無料。
+/// Plus では、タイムラインの追加と1年前までの表示、フレンドの月・年のプレイリスト、カスタムカラー、アイコンの固定が使え、広告が出ない。
 @MainActor
 final class PlusStore: ObservableObject {
     static let shared = PlusStore()
