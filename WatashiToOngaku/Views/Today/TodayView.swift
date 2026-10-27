@@ -260,6 +260,7 @@ struct TodayView: View {
         if let saved = entries.first(where: { $0.dayKey == dayKey }) ?? (try? context.fetch(FetchDescriptor<SongEntry>()))?.first(where: { $0.dayKey == dayKey }) {
             changed(saved)
         }
+        Task { await AppleMusicService.fillArtistIDs(in: context) }
     }
 
     /// 保存して、フレンド機能を使っていれば共有している投稿も更新する

@@ -71,9 +71,18 @@ extension LinearGradient {
 
 // MARK: - Button Styles
 
+// ButtonStyle の makeBody はテーマを変えても描き直されないことがあるので、
+// テーマを監視する View に包んで、色の変更がすぐ反映されるようにする
+private struct ThemedButtonBody<Content: View>: View {
+    @ObservedObject private var theme = ThemeStore.shared
+    @ViewBuilder let content: () -> Content
+    var body: some View { content() }
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
+        ThemedButtonBody {
         configuration.label
             .font(.headline)
             .foregroundColor(.white)
@@ -91,11 +100,13 @@ struct PrimaryButtonStyle: ButtonStyle {
                     radius: 12, x: 0, y: 6)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        }
     }
 }
 
 struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        ThemedButtonBody {
         configuration.label
             .font(.headline)
             .foregroundColor(.dlPrimary)
@@ -105,6 +116,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             .cornerRadius(18)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+        }
     }
 }
 

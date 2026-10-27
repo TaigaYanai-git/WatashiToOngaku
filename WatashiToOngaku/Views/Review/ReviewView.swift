@@ -276,7 +276,7 @@ struct ReviewView: View {
     }
 
     private var summary: some View {
-        let artists = Set(periodEntries.map(\.artist)).count
+        let artists = Set(periodEntries.map(\.artistKey)).count
         return HStack(spacing: 0) {
             cell("\(periodEntries.count)", S("曲", "Songs"))
             Rectangle().fill(Color.dlDivider).frame(width: 1, height: 36)

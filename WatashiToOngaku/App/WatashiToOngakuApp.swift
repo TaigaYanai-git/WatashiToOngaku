@@ -82,6 +82,8 @@ private struct AppRootView: View {
             guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
             // アプリ内のダークモード・テーマカラーとホーム画面のアイコンがずれていたら合わせる
             AppIconManager.apply()
+            // 前に選んだ曲にもアーティスト ID を入れて、表記の違う同じアーティストをまとめる
+            Task { await AppleMusicService.fillArtistIDs(in: AppContainer.shared.mainContext) }
             await SocialStore.shared.start()
         }
         // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンド申請を送る

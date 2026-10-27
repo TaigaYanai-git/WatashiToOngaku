@@ -1,4 +1,5 @@
 import MusicKit
+import SwiftData
 import UIKit
 
 /// プレイリストを Apple Music で聴く：ミュージックアプリで続けて再生する、またはライブラリにプレイリストとして保存する。
@@ -77,6 +78,28 @@ enum AppleMusicService {
         let playlist = try await MusicLibrary.shared.createPlaylist(
             name: name, description: description, authorDisplayName: S("Our Music", "Our Music"), items: songs)
         UserDefaults.standard.set(playlist.id.rawValue, forKey: storeKey)
+    }
+
+    /// アーティスト ID がまだない記録に、Apple Music で調べた主なアーティストの ID を入れる（契約は不要）
+    static func fillArtistIDs(in context: ModelContext) async {
+        guard MusicAuthorization.currentStatus == .authorized,
+              let entries = try? context.fetch(FetchDescriptor<SongEntry>()) else { return }
+        let missing = entries.filter { $0.artistID.isEmpty && !$0.songID.isEmpty && !$0.songID.hasPrefix("sample") }
+        guard !missing.isEmpty else { return }
+        var artistIDs: [String: String] = [:]
+        for chunk in Array(Set(missing.map(\.songID))).chunked(100) {
+            var request = MusicCatalogResourceRequest<Song>(matching: \.id, memberOf: chunk.map { MusicItemID($0) })
+            request.properties = [.artists]
+            guard let songs = try? await request.response().items else { continue }
+            for song in songs {
+                if let artist = song.artists?.first { artistIDs[song.id.rawValue] = artist.id.rawValue }
+            }
+        }
+        var changed = false
+        for entry in missing {
+            if let id = artistIDs[entry.songID] { entry.artistID = id; changed = true }
+        }
+        if changed { try? context.save() }
     }
 
     /// ミュージックアプリを開く

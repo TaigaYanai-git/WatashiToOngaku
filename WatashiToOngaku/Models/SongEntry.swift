@@ -11,6 +11,10 @@ final class SongEntry {
     var songID: String = ""
     var title: String = ""
     var artist: String = ""
+    /// Apple Music のアーティスト ID（主なアーティスト）。検索した言語によってアーティスト名の表記が
+    /// 「ビートルズ」「The Beatles」のように変わるので、集計ではこれで同じアーティストをまとめる。
+    /// 選んだあとに AppleMusicService.fillArtistIDs が埋める
+    var artistID: String = ""
     var albumTitle: String = ""
     var artworkURL: String = ""
     /// 約30秒の試聴用 URL
@@ -36,6 +40,7 @@ final class SongEntry {
     }
 
     func apply(_ song: PickedSong) {
+        if songID != song.id { artistID = "" }
         songID = song.id
         title = song.title
         artist = song.artist
@@ -49,6 +54,9 @@ final class SongEntry {
     }
 
     var day: Date { DayKey.date(from: dayKey) ?? createdAt }
+
+    /// 同じアーティストかどうかを見分ける値（ID がまだなければ名前）
+    var artistKey: String { artistID.isEmpty ? artist : artistID }
 }
 
 /// 検索結果から選んだ曲（MusicKit の型に依存しない形で受け渡す）

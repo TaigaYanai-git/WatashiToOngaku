@@ -42,10 +42,11 @@ enum SongStats {
 
     /// よく選んだアーティスト（同数なら最近選んだ順）
     static func topArtists(_ entries: [SongEntry], limit: Int = 5) -> [ArtistCount] {
-        Dictionary(grouping: entries, by: \.artist)
-            .map { artist, items in
+        Dictionary(grouping: entries, by: \.artistKey)
+            .map { _, items in
+                // 表記が違う曲が混ざっていたら、最近選んだ曲の表記で出す
                 let latest = items.max { $0.dayKey < $1.dayKey }
-                return (ArtistCount(artist: artist, count: items.count, artworkURL: latest?.artworkURL ?? ""),
+                return (ArtistCount(artist: latest?.artist ?? "", count: items.count, artworkURL: latest?.artworkURL ?? ""),
                         latest?.dayKey ?? "")
             }
             .sorted { ($0.0.count, $0.1) > ($1.0.count, $1.1) }
