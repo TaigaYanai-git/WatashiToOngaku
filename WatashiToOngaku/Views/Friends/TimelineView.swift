@@ -11,6 +11,8 @@ struct TimelineView: View {
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
     @State private var showProfile = false
+    @State private var showPlaylist = false
+    @State private var showPlus = false
     @State private var reporting: FriendPost?
     /// タイムラインの曲を Apple Music で流している最中（"order" / "shuffle"）
     @State private var playing: String?
@@ -68,6 +70,8 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
+            .sheet(isPresented: $showPlaylist) { FriendPlaylistView() }
+            .sheet(isPresented: $showPlus) { PlusView() }
             .alert(Text(verbatim: playError ?? ""), isPresented: Binding(get: { playError != nil }, set: { if !$0 { playError = nil } })) {
                 Button("OK", role: .cancel) {}
             }
@@ -103,6 +107,7 @@ struct TimelineView: View {
             VStack(spacing: 6) {
             if !social.friends.isEmpty {
                 TimelineListBar().padding(.top, 10)
+                playlistEntry.padding(.horizontal, 20).padding(.top, 6)
             }
             LazyVStack(spacing: 14) {
                 if posts.isEmpty {
@@ -133,6 +138,7 @@ struct TimelineView: View {
                         NativeAdCard(ad: ad)
                     }
                 }
+                if !posts.isEmpty { loadMoreFooter }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -152,6 +158,57 @@ struct TimelineView: View {
             guard followsPlayback, let post = weekPosts.first(where: isNowPlaying) else { return }
             withAnimation { proxy.scrollTo(post.id, anchor: .center) }
         }
+        }
+    }
+
+    /// フレンドの曲を1週間・月・年のプレイリストで聴く画面を開く
+    private var playlistEntry: some View {
+        Button { showPlaylist = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "music.note.list")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 36, height: 36)
+                    .background(Color.dlPrimaryBg)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: S("フレンドのプレイリスト", "Friends' Playlist", "친구 플레이리스트"))
+                        .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                    Text(verbatim: S("1週間・月・年の曲をまとめて聴く", "Listen by week, month or year", "주·월·연 단위로 모아 듣기"))
+                        .font(.caption).foregroundColor(.dlTextSub)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundColor(.dlTextLight)
+            }
+            .foregroundColor(.dlPrimary)
+            .padding(12)
+            .background(Color.dlCard)
+            .cornerRadius(16)
+        }
+    }
+
+    /// タイムラインのいちばん下。Plus はさらに前の投稿を読み込める
+    @ViewBuilder
+    private var loadMoreFooter: some View {
+        if social.canLoadMore {
+            Button {
+                Task { await social.loadMore() }
+            } label: {
+                if social.isLoadingMore {
+                    ProgressView().tint(.dlPrimary)
+                } else {
+                    Text(verbatim: S("さらに前の投稿を読み込む", "Load Earlier Posts", "이전 게시물 더 보기"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(social.isLoadingMore)
+        } else if !plus.isPlus {
+            Button { showPlus = true } label: {
+                Label(S("Plus なら1年前まで遡れます", "Go back up to a year with Plus", "Plus로 1년 전까지 볼 수 있습니다"), systemImage: "sparkles")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        } else {
+            Text(verbatim: S("ここより前の投稿はありません", "No earlier posts", "더 이전 게시물이 없습니다"))
+                .font(.caption).foregroundColor(.dlTextLight).padding(.vertical, 8)
         }
     }
 

@@ -24,7 +24,10 @@ final class SocialStore: ObservableObject {
     static let containerID = "iCloud.com.taigayanai.watashitoongaku"
     static let inviteBaseURL = "https://taigayanai-git.github.io/WatashiToOngaku/add.html"
     /// タイムラインに出す期間（日）
-    private static let timelineDays = 30
+    /// タイムラインで遡れる日数。Plus は「さらに読み込む」で30日ずつ、1年前まで遡れる
+    static let freeTimelineDays = 14
+    static let plusTimelineDays = 365
+    private static let loadMoreDays = 30
 
     enum State: Equatable {
         case notSetUp          // ニックネーム未設定（フレンド機能を使っていない）
@@ -45,6 +48,9 @@ final class SocialStore: ObservableObject {
     @Published private(set) var blockedUsers: [PendingFriend] = []
     @Published private(set) var timeline: [FriendPost] = []
     @Published private(set) var isRefreshing = false
+    /// タイムラインに読み込んである日数（今日を含む）
+    @Published private(set) var timelineDays = SocialStore.freeTimelineDays
+    @Published private(set) var isLoadingMore = false
     @Published var lastError: String?
 
     var inviteURL: URL? {
@@ -571,14 +577,39 @@ final class SocialStore: ObservableObject {
         postCache = [:]
 
         // 各フレンドの最近の投稿を、レコード名を指定して取り出す（検索はしない）
+        // 更新するたびに最初の2週間に戻す（古い投稿は必要な人が「さらに読み込む」で取る）
+        timelineDays = Self.freeTimelineDays
         let today = Date()
-        let start = Calendar.current.date(byAdding: .day, value: -(Self.timelineDays - 1), to: today)!
+        let start = Calendar.current.date(byAdding: .day, value: -(timelineDays - 1), to: today)!
         let days = Set(Self.dayKeys(from: start, to: today))
         let posts = await posts(from: start, to: today, includeAllOfMine: false)
         // 新しい日付を上に。同じ日付の中は新しい投稿を上に並べる
         timeline = posts.filter { days.contains($0.dayKey) }.sorted {
             $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
         }
+    }
+
+    /// もっと前の投稿を読み込めるか（Plus は1年前まで）
+    var canLoadMore: Bool {
+        state == .ready && timelineDays < (PlusStore.shared.isPlus ? Self.plusTimelineDays : Self.freeTimelineDays)
+    }
+
+    /// タイムラインの下に、さらに前の30日分の投稿を足す（Plus）
+    func loadMore() async {
+        guard canLoadMore, !isLoadingMore, !isRefreshing else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        let calendar = Calendar.current
+        let today = Date()
+        let newDays = min(timelineDays + Self.loadMoreDays, Self.plusTimelineDays)
+        guard let end = calendar.date(byAdding: .day, value: -timelineDays, to: today),
+              let start = calendar.date(byAdding: .day, value: -(newDays - 1), to: today) else { return }
+        let older = await posts(from: start, to: end, includeAllOfMine: false).sorted {
+            $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
+        }
+        let known = Set(timeline.map(\.id))
+        timeline += older.filter { !known.contains($0.id) }
+        timelineDays = newDays
     }
 
     // MARK: - 期間の投稿（みんなのプレイリスト）

@@ -27,6 +27,14 @@ struct PlusView: View {
                                 S("「大学」「家族」のように、入れるフレンドを選んだタイムラインを作って切り替えられます",
                                   "Make timelines with the friends you choose, like \"College\" or \"Family\", and switch between them",
                                   "'대학', '가족'처럼 친구를 골라 타임라인을 만들고 전환할 수 있습니다"))
+                        benefit("clock.arrow.circlepath", S("1年前まで遡れるタイムライン", "A year of timeline history", "1년 전까지 보는 타임라인"),
+                                S("無料では2週間分。Plus なら1年前までのフレンドの投稿を見られます",
+                                  "Free shows two weeks. With Plus, scroll back through a year of friends' posts",
+                                  "무료는 2주. Plus는 1년 전까지 친구 게시물을 볼 수 있습니다"))
+                        benefit("music.note.list", S("フレンドの月・年のプレイリスト", "Friends' monthly & yearly playlists", "친구의 월·연 플레이리스트"),
+                                S("1か月や1年のあいだにフレンドが選んだ曲を、Apple Music でまとめて聴けます",
+                                  "Listen to a month or a year of your friends' songs in Apple Music",
+                                  "한 달, 1년 동안 친구들이 고른 곡을 Apple Music으로 모아 들을 수 있습니다"))
                         benefit("rectangle.slash", S("広告なし", "No ads", "광고 없음"),
                                 S("タイムラインと今日の一曲に広告が出なくなります", "Removes ads from the timeline and Today", "타임라인과 오늘의 한 곡에 광고가 표시되지 않습니다"))
                         benefit("heart", S("開発を応援", "Support development"),
