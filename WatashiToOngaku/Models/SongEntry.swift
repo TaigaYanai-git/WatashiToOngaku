@@ -15,6 +15,9 @@ final class SongEntry {
     /// 「ビートルズ」「The Beatles」のように変わるので、集計ではこれで同じアーティストをまとめる。
     /// 選んだあとに AppleMusicService.fillArtistIDs が埋める
     var artistID: String = ""
+    /// アーティストの正式名称（ビートルズなら The Beatles）。ふりかえりのランキングに出す。
+    /// artistID と一緒に AppleMusicService.fillArtistIDs が埋める
+    var artistName: String = ""
     var albumTitle: String = ""
     var artworkURL: String = ""
     /// 約30秒の試聴用 URL
@@ -40,7 +43,7 @@ final class SongEntry {
     }
 
     func apply(_ song: PickedSong) {
-        if songID != song.id { artistID = "" }
+        if songID != song.id { artistID = ""; artistName = "" }
         songID = song.id
         title = song.title
         artist = song.artist
@@ -57,6 +60,9 @@ final class SongEntry {
 
     /// 同じアーティストかどうかを見分ける値（ID がまだなければ名前）
     var artistKey: String { artistID.isEmpty ? artist : artistID }
+
+    /// ランキングに出す名前（正式名称がまだなければ曲のアーティスト表記）
+    var artistDisplayName: String { artistName.isEmpty ? artist : artistName }
 }
 
 /// 検索結果から選んだ曲（MusicKit の型に依存しない形で受け渡す）
