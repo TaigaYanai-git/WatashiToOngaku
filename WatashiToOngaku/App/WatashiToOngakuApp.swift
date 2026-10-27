@@ -81,7 +81,7 @@ private struct AppRootView: View {
             await PlusStore.shared.refresh()
             guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
             // アプリ内のダークモード・テーマカラーとホーム画面のアイコンがずれていたら合わせる
-            AppIconManager.apply()
+            AppIconManager.syncOnLaunch()
             // 前に選んだ曲にもアーティスト ID を入れて、表記の違う同じアーティストをまとめる
             Task {
                 await AppleMusicService.fillArtistIDs(in: AppContainer.shared.mainContext)

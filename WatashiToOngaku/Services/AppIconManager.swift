@@ -10,6 +10,8 @@ enum AppIconManager {
     /// Plus：固定するアイコン（テーマカラーの番号。-1 なら固定しない）と、ダークのアイコンにするか
     static let fixedThemeKey = "icon_fixedTheme"
     static let fixedDarkKey = "icon_fixedDark"
+    /// 固定をやめたあと、テーマやダークモードを変えるまで今のアイコンのままにする
+    private static let holdKey = "icon_hold"
 
     /// ThemeStore.accents と同じ並び。ブラック（0）は標準のアイコン
     static let themes = ["", "White", "Rose", "Coral", "Sunset", "Lemon", "Mint", "Sky", "Lavender"]
@@ -29,7 +31,7 @@ enum AppIconManager {
         if let theme { ud.set(theme, forKey: fixedThemeKey) } else { ud.removeObject(forKey: fixedThemeKey) }
         ud.set(isDark, forKey: fixedDarkKey)
         // 固定をやめたときは、今のアイコンのままにする（次にテーマやダークモードを変えたときから合わせる）
-        if theme != nil { apply() }
+        if theme != nil { apply() } else { ud.set(true, forKey: holdKey) }
     }
 
     /// テーマの番号とダークかどうかから、アイコンの名前（標準のアイコンなら nil）
@@ -46,7 +48,14 @@ enum AppIconManager {
         return name(theme: followsTheme ? accentIndex : 0, isDark: isDark)
     }
 
+    /// 起動時：アプリの設定とアイコンがずれていたら合わせる（固定をやめた直後のアイコンはそのまま）
+    static func syncOnLaunch() {
+        guard !UserDefaults.standard.bool(forKey: holdKey) else { return }
+        apply()
+    }
+
     static func apply(accentIndex: Int = ThemeStore.shared.accentIndex, isDark: Bool = ThemeStore.shared.isDark) {
+        UserDefaults.standard.removeObject(forKey: holdKey)
         let name = iconName(accentIndex: accentIndex, isDark: isDark)
         guard UIApplication.shared.supportsAlternateIcons,
               UIApplication.shared.alternateIconName != name else { return }
