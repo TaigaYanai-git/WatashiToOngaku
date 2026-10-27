@@ -47,13 +47,8 @@ struct TimelineView: View {
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }
-                    // 選んでいるタイムラインの1週間分の曲を、上から順に／シャッフルで Apple Music で聴く
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        playButton("order", id: "order", label: S("1週間分を上から再生", "Play This Week in Order"))
-                    }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        playButton("shuffle", id: "shuffle", label: S("1週間分をシャッフル再生", "Shuffle This Week"))
-                    }
+                    // 選んでいるタイムラインの曲を Apple Music で聴く（1週間分の再生と、月・年のプレイリスト）
+                    ToolbarItem(placement: .navigationBarTrailing) { playMenu }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button { showFriends = true } label: {
                             Image(systemName: "person.2.badge.plus")
@@ -107,7 +102,6 @@ struct TimelineView: View {
             VStack(spacing: 6) {
             if !social.friends.isEmpty {
                 TimelineListBar().padding(.top, 10)
-                playlistEntry.padding(.horizontal, 20).padding(.top, 6)
             }
             LazyVStack(spacing: 14) {
                 if posts.isEmpty {
@@ -158,31 +152,6 @@ struct TimelineView: View {
             guard followsPlayback, let post = weekPosts.first(where: isNowPlaying) else { return }
             withAnimation { proxy.scrollTo(post.id, anchor: .center) }
         }
-        }
-    }
-
-    /// フレンドの曲を1週間・月・年のプレイリストで聴く画面を開く
-    private var playlistEntry: some View {
-        Button { showPlaylist = true } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "music.note.list")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 36, height: 36)
-                    .background(Color.dlPrimaryBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: S("フレンドのプレイリスト", "Friends' Playlist", "친구 플레이리스트"))
-                        .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
-                    Text(verbatim: S("1週間・月・年の曲をまとめて聴く", "Listen by week, month or year", "주·월·연 단위로 모아 듣기"))
-                        .font(.caption).foregroundColor(.dlTextSub)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundColor(.dlTextLight)
-            }
-            .foregroundColor(.dlPrimary)
-            .padding(12)
-            .background(Color.dlCard)
-            .cornerRadius(16)
         }
     }
 
@@ -247,32 +216,46 @@ struct TimelineView: View {
         return social.timeline.filter { TimelineListStore.includes($0, in: list) }
     }
 
-    private func playButton(_ symbol: String, id: String, label: String) -> some View {
-        Button {
-            playing = id
-            Task {
-                defer { playing = nil }
-                do {
-                    try await AppleMusicService.play(weekPosts.map(\.songID), shuffle: id == "shuffle")
-                    followsPlayback = true
-                } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
-                    showOffer = true
-                } catch {
-                    playError = error.localizedDescription
-                }
+    /// 右上の再生メニュー：1週間分を上から／シャッフルで再生、フレンドのプレイリスト（月・年）
+    private var playMenu: some View {
+        Menu {
+            Button { play("order") } label: {
+                Label(S("1週間分を上から再生", "Play This Week in Order", "1주일분 위에서부터 재생"), systemImage: "play")
+            }
+            .disabled(weekPosts.isEmpty)
+            Button { play("shuffle") } label: {
+                Label(S("1週間分をシャッフル再生", "Shuffle This Week", "1주일분 셔플 재생"), systemImage: "shuffle")
+            }
+            .disabled(weekPosts.isEmpty)
+            Divider()
+            Button { showPlaylist = true } label: {
+                Label(S("フレンドのプレイリスト（週・月・年）", "Friends' Playlist (Week, Month, Year)", "친구 플레이리스트（주·월·연）"), systemImage: "music.note.list")
             }
         } label: {
-            if playing == id {
+            if playing != nil {
                 ProgressView().tint(.dlPrimary)
-            } else if id == "order" {
-                PlayFromTopIcon()
             } else {
-                Image(systemName: symbol)
+                PlayFromTopIcon()
             }
         }
         .foregroundColor(.dlPrimary)
-        .disabled(weekPosts.isEmpty || playing != nil)
-        .accessibilityLabel(label)
+        .disabled(playing != nil)
+        .accessibilityLabel(S("再生", "Play", "재생"))
+    }
+
+    private func play(_ id: String) {
+        playing = id
+        Task {
+            defer { playing = nil }
+            do {
+                try await AppleMusicService.play(weekPosts.map(\.songID), shuffle: id == "shuffle")
+                followsPlayback = true
+            } catch AppleMusicService.Failure.noSubscription(let canSubscribe) where canSubscribe {
+                showOffer = true
+            } catch {
+                playError = error.localizedDescription
+            }
+        }
     }
 
     private func message_(_ text: String) -> some View {
