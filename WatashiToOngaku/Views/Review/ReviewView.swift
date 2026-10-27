@@ -10,14 +10,12 @@ struct ReviewView: View {
     @State private var span: Span = .month
     @State private var anchor = Date()
     @State private var showShare = false
-    @ObservedObject private var plus = PlusStore.shared
     /// 再生ボタンで流し始めたら、流れている曲までスクロールして追いかける
     @State private var followsPlayback = false
     @AppStorage(Birthday.key) private var birthdayStored: Double = 0
     /// 表示している年齢（nil なら今の年齢）
     @State private var shownAge: Int?
     @State private var showBirthday = false
-    @State private var showPlus = false
     /// Apple Music で流す・保存している最中（"order" / "shuffle" / "save"）
     @State private var working: String?
     @State private var musicError: String?
@@ -75,9 +73,6 @@ struct ReviewView: View {
 
     /// ライブラリに保存したプレイリストを、同じ期間なら作り直さずに入れ替えるための名前
     private var playlistKey: String { span == .age ? "age-\(age)" : "mine-\(prefix)" }
-
-    /// 1年ぶん（年・年齢）のプレイリストは Plus
-    private var locked: Bool { span != .month && !plus.isPlus }
 
     var body: some View {
         NavigationStack {
@@ -139,7 +134,7 @@ struct ReviewView: View {
                         .fixedSize()
                 }
                 .sharedBackgroundHiddenIfAvailable()
-                // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する（年・年齢は Plus）
+                // 「選んだ曲」の上から順に／シャッフルで流す・ライブラリに保存する
                 ToolbarItem(placement: .navigationBarTrailing) {
                     musicButton(id: "order", label: S("上から再生", "Play in Order")) { PlayFromTopIcon() } action: {
                         try await AppleMusicService.play(periodEntries.map(\.songID))
@@ -166,7 +161,6 @@ struct ReviewView: View {
             }
             .sheet(isPresented: $showShare) { ShareCardSheet(title: periodTitle, entries: periodEntries) }
             .sheet(isPresented: $showBirthday) { BirthdaySheet() }
-            .sheet(isPresented: $showPlus) { PlusView() }
             .alert(Text(verbatim: musicError ?? ""), isPresented: Binding(get: { musicError != nil }, set: { if !$0 { musicError = nil } })) {
                 Button("OK", role: .cancel) {}
             }
@@ -182,7 +176,6 @@ struct ReviewView: View {
     private func musicButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
                                          action: @escaping () async throws -> Void) -> some View {
         Button {
-            guard !locked else { showPlus = true; return }
             working = id
             Task {
                 defer { working = nil }

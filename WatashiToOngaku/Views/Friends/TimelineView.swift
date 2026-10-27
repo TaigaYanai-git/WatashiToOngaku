@@ -7,6 +7,7 @@ struct TimelineView: View {
     @ObservedObject private var social = SocialStore.shared
     @ObservedObject private var adStore = NativeAdStore.shared
     @ObservedObject private var plus = PlusStore.shared
+    @ObservedObject private var timelineLists = TimelineListStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
     @State private var showProfile = false
@@ -44,7 +45,7 @@ struct TimelineView: View {
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }
-                    // みんなが投稿した1週間分の曲を、タイムラインの上から順に／シャッフルで Apple Music で聴く
+                    // 選んでいるタイムラインの1週間分の曲を、上から順に／シャッフルで Apple Music で聴く
                     ToolbarItem(placement: .navigationBarTrailing) {
                         playButton("order", id: "order", label: S("1週間分を上から再生", "Play This Week in Order"))
                     }
@@ -99,12 +100,18 @@ struct TimelineView: View {
     private var list: some View {
         ScrollViewReader { proxy in
         ScrollView {
+            VStack(spacing: 6) {
+            if !social.friends.isEmpty {
+                TimelineListBar().padding(.top, 10)
+            }
             LazyVStack(spacing: 14) {
-                if social.timeline.isEmpty {
+                if posts.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
                         Text(verbatim: social.friends.isEmpty
                              ? S("フレンドを追加すると、選んだ曲がここに流れます", "Add friends to see their songs here")
+                             : selectedList != nil
+                             ? S("このタイムラインの投稿はまだありません。長押しで入れるフレンドを編集できます", "No posts in this timeline yet. Long-press its name to edit friends.", "이 타임라인에는 아직 게시물이 없습니다. 이름을 길게 눌러 친구를 편집할 수 있습니다")
                              : S("フレンドの投稿はまだありません", "No posts from friends yet"))
                             .font(.subheadline)
                             .foregroundColor(.dlTextSub)
@@ -117,7 +124,7 @@ struct TimelineView: View {
                     }
                     .padding(.top, 60)
                 }
-                ForEach(Array(social.timeline.enumerated()), id: \.element.id) { index, post in
+                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
                     PostCard(post: post, isPlaying: isNowPlaying(post)) { reporting = post }
                         .id(post.id)
                     // 投稿5件ごとに広告を挟む（Plus の人には出さない）
@@ -129,10 +136,11 @@ struct TimelineView: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
+            }
         }
         .refreshable { await social.refresh() }
         .task { await social.refresh() }
-        .task(id: social.timeline.count) { await adStore.load(forPosts: social.timeline.count) }
+        .task(id: posts.count) { await adStore.load(forPosts: posts.count) }
         // タイムラインの曲が流れている（一時停止中も）あいだは、下に操作バーを出す
         .safeAreaInset(edge: .bottom) {
             if let post = currentPost, let song = currentSong {
@@ -163,14 +171,23 @@ struct TimelineView: View {
     /// 今の曲がタイムラインにあれば、その投稿
     private var currentPost: FriendPost? {
         guard let song = currentSong else { return nil }
-        return social.timeline.first { matches($0, song) }
+        return posts.first { matches($0, song) }
     }
 
     /// 今日を含めた1週間（7日）の投稿。タイムラインと同じ並び
     private var weekPosts: [FriendPost] {
         let start = Calendar.current.date(byAdding: .day, value: -6, to: Date()) ?? Date()
         let firstKey = DayKey.string(from: start)
-        return social.timeline.filter { $0.dayKey >= firstKey }
+        return posts.filter { $0.dayKey >= firstKey }
+    }
+
+    /// 今選んでいるタイムライン（「すべて」なら nil）
+    private var selectedList: TimelineList? { timelineLists.current(isPlus: plus.isPlus) }
+
+    /// 選んでいるタイムラインに出す投稿
+    private var posts: [FriendPost] {
+        let list = selectedList
+        return social.timeline.filter { TimelineListStore.includes($0, in: list) }
     }
 
     private func playButton(_ symbol: String, id: String, label: String) -> some View {
