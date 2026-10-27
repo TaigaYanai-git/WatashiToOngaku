@@ -23,7 +23,7 @@ struct PlusView: View {
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 14) {
-                        benefit("rectangle.stack", S("タイムラインを5つまで", "Up to 5 timelines", "타임라인 최대 5개"),
+                        benefit("rectangle.stack", S("タイムラインを5つ追加", "5 more timelines", "타임라인 5개 추가"),
                                 S("「大学」「家族」のように、入れるフレンドを選んだタイムラインを作って切り替えられます",
                                   "Make timelines with the friends you choose, like \"College\" or \"Family\", and switch between them",
                                   "'대학', '가족'처럼 친구를 골라 타임라인을 만들고 전환할 수 있습니다"))
@@ -37,8 +37,6 @@ struct PlusView: View {
                                   "한 달, 1년 동안 친구들이 고른 곡을 Apple Music으로 모아 들을 수 있습니다"))
                         benefit("rectangle.slash", S("広告なし", "No ads", "광고 없음"),
                                 S("タイムラインと今日の一曲に広告が出なくなります", "Removes ads from the timeline and Today", "타임라인과 오늘의 한 곡에 광고가 표시되지 않습니다"))
-                        benefit("heart", S("開発を応援", "Support development"),
-                                S("アプリを続けていくための力になります", "Helps keep the app going"))
                     }
                     .dlCard()
                 }

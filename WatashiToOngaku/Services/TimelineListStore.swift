@@ -13,8 +13,8 @@ struct TimelineList: Codable, Identifiable, Hashable {
 final class TimelineListStore: ObservableObject {
     static let shared = TimelineListStore()
 
-    /// 「みんな」を含めて持てるタイムラインの数
-    static let maxCount = 5
+    /// 「みんな」のほかに作れるタイムラインの数
+    static let maxCustomCount = 5
     /// 「みんな」のタイムライン（選んでいないときもこれ）
     static let allID = "all"
 
@@ -35,7 +35,7 @@ final class TimelineListStore: ObservableObject {
         selectedID = UserDefaults.standard.string(forKey: Self.selectedKey) ?? Self.allID
     }
 
-    var canAddMore: Bool { lists.count < Self.maxCount - 1 }
+    var canAddMore: Bool { lists.count < Self.maxCustomCount }
 
     /// 今選んでいるタイムライン。Plus でなくなったら（作ったものは残したまま）「みんな」を見せる
     func current(isPlus: Bool) -> TimelineList? {
