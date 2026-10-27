@@ -279,7 +279,7 @@ private struct PostCard: View {
 
     private var dayText: String {
         guard let day = post.day else { return "" }
-        return S("\(day.formatted(.dateTime.month().day()))の一曲", "Song of \(day.formatted(.dateTime.month().day()))", "\(day.formatted(.dateTime.month().day()))의 한 곡")
+        return S("\(day.formatted(.dateTime.locale(.app).month().day()))の一曲", "Song of \(day.formatted(.dateTime.locale(.app).month().day()))", "\(day.formatted(.dateTime.locale(.app).month().day()))의 한 곡")
     }
 }
 

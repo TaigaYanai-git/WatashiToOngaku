@@ -109,7 +109,12 @@ struct PlayableArtwork: View {
 extension Date {
     /// 2026年10月21日(水) / Wed, Oct 21, 2026 / 2026년 10월 21일 (수)
     var longDayText: String {
-        formatted(.dateTime.locale(Locale(identifier: S("ja_JP", "en_US", "ko_KR")))
+        formatted(.dateTime.locale(.app)
             .year().month().day().weekday(.abbreviated))
     }
+}
+
+extension Locale {
+    /// アプリで選んだ言語の Locale（iPhone の言語設定ではなく、アプリ内の設定に合わせて日付などを書く）
+    static var app: Locale { Locale(identifier: S("ja_JP", "en_US", "ko_KR")) }
 }

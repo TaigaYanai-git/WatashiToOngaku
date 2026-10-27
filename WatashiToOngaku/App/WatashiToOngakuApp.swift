@@ -72,6 +72,8 @@ private struct AppRootView: View {
         }
         .tint(.dlPrimary)
         .id(theme.language)
+        // 日付や時刻の選択などのシステムの表示も、アプリで選んだ言語にする
+        .environment(\.locale, .app)
         .preferredColorScheme(theme.isDark ? .dark : .light)
         .environmentObject(theme)
         .environmentObject(router)

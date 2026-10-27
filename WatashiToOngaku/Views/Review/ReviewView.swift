@@ -67,8 +67,8 @@ struct ReviewView: View {
 
     private var periodTitle: String {
         switch span {
-        case .month: return anchor.formatted(.dateTime.year().month())
-        case .year: return anchor.formatted(.dateTime.year())
+        case .month: return anchor.formatted(.dateTime.locale(.app).year().month())
+        case .year: return anchor.formatted(.dateTime.locale(.app).year())
         case .age: return S("\(age)歳", "Age \(age)", "\(age)세")
         }
     }
@@ -116,7 +116,7 @@ struct ReviewView: View {
             .safeAreaInset(edge: .bottom) {
                 if let entry = currentEntry, let song = currentSong {
                     NowPlayingBar(artworkURL: entry.artworkURL, title: entry.title,
-                                  subtitle: "\(entry.artist) ・ \(entry.day.formatted(.dateTime.month(.defaultDigits).day()))",
+                                  subtitle: "\(entry.artist) ・ \(entry.day.formatted(.dateTime.locale(.app).month(.defaultDigits).day()))",
                                   isPlaying: song.isPlaying) { followsPlayback = true }
                 }
             }
@@ -251,7 +251,7 @@ struct ReviewView: View {
                     Button {
                         showBirthday = true
                     } label: {
-                        Text(verbatim: "\(range.start.formatted(.dateTime.year().month(.defaultDigits).day())) – \(range.end.formatted(.dateTime.year().month(.defaultDigits).day()))")
+                        Text(verbatim: "\(range.start.formatted(.dateTime.locale(.app).year().month(.defaultDigits).day())) – \(range.end.formatted(.dateTime.locale(.app).year().month(.defaultDigits).day()))")
                             .font(.caption)
                             .foregroundColor(.dlTextSub)
                     }
@@ -305,7 +305,7 @@ struct ReviewView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.dlTextSub)
                 Spacer()
-                // この期間のジャケットとよく選んだアーティストを、シェア画像にする
+                // この期間のよく選んだアーティストのランキングを、シェア画像にする
                 Button { showShare = true } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(.subheadline.weight(.semibold))
@@ -361,7 +361,7 @@ struct ReviewView: View {
                         if playing {
                             NowPlayingBadge()
                         } else {
-                            Text(entry.day, format: .dateTime.month(.defaultDigits).day())
+                            Text(entry.day, format: .dateTime.locale(.app).month(.defaultDigits).day())
                                 .font(.caption.monospacedDigit())
                                 .foregroundColor(.dlTextSub)
                         }

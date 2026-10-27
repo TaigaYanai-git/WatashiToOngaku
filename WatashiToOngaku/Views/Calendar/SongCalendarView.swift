@@ -49,7 +49,7 @@ struct SongCalendarView: View {
         HStack {
             arrow("chevron.left") { shiftMonth(-1) }
             Spacer()
-            Text(month, format: .dateTime.year().month())
+            Text(month, format: .dateTime.locale(.app).year().month())
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlText)
             Spacer()

@@ -294,7 +294,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             // 年齢ごとのプレイリスト（ふりかえり）に使う
             row(icon: "gift", title: S("誕生日", "Birthday"),
-                detail: Birthday.date(from: birthdayStored)?.formatted(.dateTime.year().month(.defaultDigits).day()) ?? S("未登録", "Not set")) {
+                detail: Birthday.date(from: birthdayStored)?.formatted(.dateTime.locale(.app).year().month(.defaultDigits).day()) ?? S("未登録", "Not set")) {
                 showBirthday = true
             }
         }

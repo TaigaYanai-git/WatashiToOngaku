@@ -48,7 +48,7 @@ struct PlusView: View {
         .onInAppPurchaseCompletion { _, _ in await plus.refresh() }
         .onChange(of: plus.isPlus) { _, isPlus in if isPlus { dismiss() } }
         // 「登録する」などの StoreKit の文言も、アプリで選んだ言語にそろえる
-        .environment(\.locale, Locale(identifier: S("ja_JP", "en_US", "ko_KR")))
+        .environment(\.locale, .app)
     }
 
     private func benefit(_ symbol: String, _ title: String, _ detail: String) -> some View {
