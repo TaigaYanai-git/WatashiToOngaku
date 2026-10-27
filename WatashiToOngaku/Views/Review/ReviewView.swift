@@ -116,7 +116,7 @@ struct ReviewView: View {
             .safeAreaInset(edge: .bottom) {
                 if let entry = currentEntry, let song = currentSong {
                     NowPlayingBar(artworkURL: entry.artworkURL, title: entry.title,
-                                  subtitle: "\(entry.artist) ・ \(entry.day.formatted(.dateTime.locale(.app).month(.defaultDigits).day()))",
+                                  subtitle: "\(entry.artistDisplayName) ・ \(entry.day.formatted(.dateTime.locale(.app).month(.defaultDigits).day()))",
                                   isPlaying: song.isPlaying) { followsPlayback = true }
                 }
             }
@@ -352,7 +352,7 @@ struct ReviewView: View {
                                         songID: entry.songID, clipStart: entry.clipStart)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.title).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
-                            Text(entry.artist).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
+                            Text(entry.artistDisplayName).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
                             if !entry.memo.isEmpty {
                                 Text(entry.memo).font(.caption).foregroundColor(.dlTextLight).lineLimit(1)
                             }

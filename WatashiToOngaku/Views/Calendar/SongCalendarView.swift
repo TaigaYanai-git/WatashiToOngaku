@@ -155,6 +155,6 @@ private struct DayCell: View {
         }
         .buttonStyle(.plain)
         .disabled(isFuture)
-        .accessibilityLabel(entry.map { "\(day.longDayText) \($0.title) \($0.artist)" } ?? day.longDayText)
+        .accessibilityLabel(entry.map { "\(day.longDayText) \($0.title) \($0.artistDisplayName)" } ?? day.longDayText)
     }
 }

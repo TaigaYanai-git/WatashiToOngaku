@@ -247,7 +247,7 @@ final class SocialStore: ObservableObject {
         record["dayKey"] = entry.dayKey
         record["songID"] = entry.songID
         record["title"] = entry.title
-        record["artist"] = entry.artist
+        record["artist"] = entry.artistDisplayName
         record["albumTitle"] = entry.albumTitle
         record["artworkURL"] = entry.artworkURL
         record["previewURL"] = entry.previewURL
@@ -275,7 +275,7 @@ final class SocialStore: ObservableObject {
     }
 
     private static func stamp(_ entry: SongEntry) -> String {
-        [entry.songID, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)",
+        [entry.songID, entry.artistDisplayName, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)",
          entry.clipStart.map { "\($0)" } ?? "-"].joined(separator: "|")
     }
 
@@ -315,6 +315,12 @@ final class SocialStore: ObservableObject {
         try? context.save()
         uploadedStamps = stamps
         return restored
+    }
+
+    /// 前回から変わった記録を置き直す（アーティストの正式名称が分かったときなど）
+    func uploadChanges() async {
+        guard state == .ready else { return }
+        await uploadAll()
     }
 
     /// すべての記録を置く（月・年のプレイリストでフレンドが過去の曲も聴けるように）。
@@ -787,7 +793,7 @@ struct FriendPost: Identifiable {
         dayKey = entry.dayKey
         songID = entry.songID
         title = entry.title
-        artist = entry.artist
+        artist = entry.artistDisplayName
         artworkURL = entry.artworkURL
         previewURL = entry.previewURL
         appleMusicURL = entry.appleMusicURL

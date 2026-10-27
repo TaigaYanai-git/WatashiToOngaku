@@ -110,7 +110,7 @@ struct TodayView: View {
                     .font(.title3.weight(.bold))
                     .foregroundColor(.dlText)
                     .multilineTextAlignment(.center)
-                Text(entry.artist)
+                Text(entry.artistDisplayName)
                     .font(.subheadline)
                     .foregroundColor(.dlTextSub)
                 if !entry.albumTitle.isEmpty {
@@ -260,7 +260,11 @@ struct TodayView: View {
         if let saved = entries.first(where: { $0.dayKey == dayKey }) ?? (try? context.fetch(FetchDescriptor<SongEntry>()))?.first(where: { $0.dayKey == dayKey }) {
             changed(saved)
         }
-        Task { await AppleMusicService.fillArtistIDs(in: context) }
+        Task {
+            // 正式名称が分かったら、フレンドに見える投稿のアーティスト名も直す
+            await AppleMusicService.fillArtistIDs(in: context)
+            await social.uploadChanges()
+        }
     }
 
     /// 保存して、フレンド機能を使っていれば共有している投稿も更新する
