@@ -81,22 +81,17 @@ struct AppIconPickerSheet: View {
     }
 }
 
-/// アイコンの見本（レコード盤をテーマカラーで描いた簡単なもの）
+/// アイコンの見本（scripts/make_icon_previews.sh で .icon から書き出した画像）
 private struct IconPreview: View {
     let accent: ThemeAccent
     let dark: Bool
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(dark ? Color(white: 0.1) : Color.white)
+        Image("IconPreview-" + (AppIconManager.name(theme: accent.id, isDark: dark) ?? "AppIcon"))
+            .resizable()
+            .scaledToFit()
             .frame(width: 64, height: 64)
-            .overlay(
-                ZStack {
-                    Circle().fill(accent.primary).frame(width: 40, height: 40)
-                    Circle().stroke(Color.white.opacity(0.35), lineWidth: 1).frame(width: 28, height: 28)
-                    Circle().fill(dark ? Color(white: 0.1) : Color.white).frame(width: 8, height: 8)
-                }
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
     }
 }
