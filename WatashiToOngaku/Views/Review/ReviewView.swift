@@ -117,6 +117,7 @@ struct ReviewView: View {
                                   isPlaying: song.isPlaying) { followsPlayback = true }
                 }
             }
+            .refreshable { await ArtworkCache.shared.reload() }
             .onChange(of: currentSong) { _, _ in
                 guard followsPlayback, let entry = periodEntries.first(where: isNowPlaying) else { return }
                 withAnimation { proxy.scrollTo(entry.dayKey, anchor: .center) }

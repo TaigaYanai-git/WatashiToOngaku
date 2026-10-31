@@ -45,6 +45,7 @@ struct TodayView: View {
                 .padding(.vertical, 12)
             }
             .scrollDismissesKeyboard(.interactively)
+            .refreshable { await ArtworkCache.shared.reload() }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: isToday ? S("今日の一曲", "Today's Song") : S("この日の一曲", "Song of the Day")))
             .navigationBarTitleDisplayMode(.inline)

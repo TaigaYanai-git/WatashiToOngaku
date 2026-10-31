@@ -38,6 +38,7 @@ struct SongCalendarView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 24)
             }
+            .refreshable { await ArtworkCache.shared.reload() }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: S("カレンダー", "Calendar")))
             .navigationBarTitleDisplayMode(.inline)

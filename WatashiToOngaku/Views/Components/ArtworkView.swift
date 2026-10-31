@@ -1,26 +1,79 @@
 import SwiftUI
 
 /// アルバムジャケット。スクリーンショット用のサンプル（"sample:番号"）は端末内で描く。
+/// 読み込んだ画像は ArtworkCache に置くので、今日の画面で見た曲はカレンダーやふりかえりでもすぐ出る
 struct ArtworkView: View {
     let url: String
     var cornerRadius: CGFloat = 12
+    @ObservedObject private var cache = ArtworkCache.shared
+    @State private var loaded: UIImage?
 
     var body: some View {
         Group {
             if url.hasPrefix("sample:"), let n = Int(url.dropFirst(7)) {
                 SampleArtwork(index: n)
+            } else if let image = loaded ?? cache.cached(url) {
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
-                AsyncImage(url: URL(string: url)) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    ZStack {
-                        Color.dlPrimaryBg
-                        Image(systemName: "music.note").foregroundColor(.dlPrimary)
-                    }
+                ZStack {
+                    Color.dlPrimaryBg
+                    Image(systemName: "music.note").foregroundColor(.dlPrimary)
                 }
+                .task(id: "\(url)#\(cache.generation)") { loaded = await cache.load(url) }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+/// ジャケット画像の読み込みと、アプリを開いているあいだの置き場所。
+/// AsyncImage は覚えておかず、失敗するとそのままになるので、自分で読み込んで失敗したら少し待ってやり直す
+@MainActor
+final class ArtworkCache: ObservableObject {
+    static let shared = ArtworkCache()
+
+    /// 上げると、読み込めていないジャケットをもう一度読み込む
+    @Published private(set) var generation = 0
+    private let images = NSCache<NSString, UIImage>()
+    private var loading: [String: Task<UIImage?, Never>] = [:]
+    private var failed: Set<String> = []
+
+    private init() { images.countLimit = 300 }
+
+    func cached(_ url: String) -> UIImage? { images.object(forKey: url as NSString) }
+
+    func load(_ url: String) async -> UIImage? {
+        if let image = cached(url) { return image }
+        if let task = loading[url] { return await task.value }
+        guard let target = URL(string: url) else { return nil }
+        let task = Task<UIImage?, Never> {
+            for attempt in 0..<3 {
+                if attempt > 0 { try? await Task.sleep(for: .seconds(Double(attempt))) }
+                if let (data, _) = try? await URLSession.shared.data(from: target), let image = UIImage(data: data) {
+                    return image
+                }
+            }
+            return nil
+        }
+        loading[url] = task
+        let image = await task.value
+        loading[url] = nil
+        if let image {
+            images.setObject(image, forKey: url as NSString)
+            failed.remove(url)
+        } else {
+            failed.insert(url)
+        }
+        return image
+    }
+
+    /// 引っ張って更新：読み込めなかったジャケットを読み込み直す
+    func reload() async {
+        let urls = failed
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls { group.addTask { _ = await self.load(url) } }
+        }
+        generation += 1
     }
 }
 
