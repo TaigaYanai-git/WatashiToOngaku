@@ -19,6 +19,9 @@ struct SettingsView: View {
     @AppStorage(Birthday.key) private var birthdayStored: Double = 0
     @State private var restoring = false
     @State private var restoreMessage: String?
+    @State private var confirmLeave = false
+    @State private var leaving = false
+    @State private var leaveFailed = false
 
     var body: some View {
         NavigationStack {
@@ -396,8 +399,32 @@ struct SettingsView: View {
                             : S("戻せる曲はありませんでした。フレンドに共有した日の曲だけ戻せます", "Nothing to restore. Only songs shared with friends can be restored")
                     }
                 }
+                // iCloud に置いたプロフィールと投稿をすべて消す（アカウントの削除にあたる）
+                row(icon: "person.crop.circle.badge.xmark", title: S("フレンド機能をやめる", "Stop Using Friends", "친구 기능 그만두기"),
+                    detail: leaving ? S("削除しています…", "Deleting…", "삭제하는 중…") : "") {
+                    guard !leaving else { return }
+                    confirmLeave = true
+                }
             }
             .alert(Text(verbatim: restoreMessage ?? ""), isPresented: Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            }
+            .confirmationDialog(Text(verbatim: S("フレンド機能をやめて、データを削除しますか？", "Stop using Friends and delete your data?", "친구 기능을 그만두고 데이터를 삭제할까요?")),
+                                isPresented: $confirmLeave, titleVisibility: .visible) {
+                Button(S("削除する", "Delete", "삭제"), role: .destructive) {
+                    leaving = true
+                    Task {
+                        leaveFailed = !(await social.leave())
+                        leaving = false
+                    }
+                }
+            } message: {
+                Text(verbatim: S("iCloud に置いたニックネーム・アイコン・共有した曲を削除し、フレンドとのつながりもなくなります。この端末の記録は残ります。元には戻せません。",
+                                 "Your nickname, icon, and shared songs will be deleted from iCloud, and you'll be disconnected from all friends. Songs on this device are kept. This can't be undone.",
+                                 "iCloud에 저장된 닉네임·아이콘·공유한 곡이 삭제되고 친구와의 연결도 없어집니다. 이 기기의 기록은 남습니다. 되돌릴 수 없습니다."))
+            }
+            .alert(Text(verbatim: S("削除できませんでした。通信できる場所でもう一度お試しください", "Couldn't delete your data. Check your connection and try again.", "삭제하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.")),
+                   isPresented: $leaveFailed) {
                 Button("OK", role: .cancel) {}
             }
         }

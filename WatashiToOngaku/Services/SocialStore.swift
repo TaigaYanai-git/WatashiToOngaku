@@ -743,6 +743,46 @@ final class SocialStore: ObservableObject {
         await remove(post.friend, block: true)
     }
 
+    // MARK: - フレンド機能をやめる
+
+    /// iCloud に置いた自分のデータ（ニックネーム・アイコン・投稿・相手に届けた鍵）をすべて消して、使い始める前に戻す。
+    /// 端末の記録とブロックリストは残す。消せなかったら false
+    func leave() async -> Bool {
+        guard state == .ready else { return false }
+        for code in links.map(\.code) + outgoingCodes { await withdrawKey(from: code) }
+        let dayKeys = Set(localEntries.map(\.dayKey)).union(uploadedStamps.keys)
+        let ids = dayKeys.map { postID(secret: secret, dayKey: $0) } + [CKRecord.ID(recordName: friendCode)]
+        do {
+            for chunk in ids.chunked(200) {
+                _ = try await publicDB.modifyRecords(saving: [], deleting: chunk)
+            }
+        } catch {
+            lastError = Self.describe(error)
+            return false
+        }
+        local.removeObject(forKey: "social_uploaded_\(secret)")
+        for key in ["social_nickname", "social_secret", "social_code", "social_avatarVersion", "social_privateKey",
+                    "social_links", "social_outgoing"] {
+            local.removeObject(forKey: key)
+            if usesCloud { cloud.removeObject(forKey: key) }
+        }
+        if usesCloud { cloud.synchronize() }
+        for key in ["social_incoming", "social_handledRequests", "social_restoredOnce"] {
+            local.removeObject(forKey: key)
+        }
+        try? FileManager.default.removeItem(at: myAvatarFile)
+        nickname = ""
+        friendCode = ""
+        avatarVersion = 0
+        friends = []
+        incomingRequests = []
+        outgoingRequests = []
+        timeline = []
+        timelineDays = Self.freeTimelineDays
+        state = .notSetUp
+        return true
+    }
+
     // MARK: - CloudKit の小さな手助け
 
     private func save(_ record: CKRecord) async throws -> CKRecord {
