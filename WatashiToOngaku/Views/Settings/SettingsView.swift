@@ -405,13 +405,6 @@ struct SettingsView: View {
                     guard !leaving else { return }
                     confirmLeave = true
                 }
-                Text(verbatim: S("iCloud に置いたニックネーム・アイコン・フレンドに共有した曲とメモを削除し、すべてのフレンドとのつながりがなくなります。元には戻せません。\nこの iPhone の今日・カレンダー・ふりかえりの記録は残ります。ただし、アプリを入れ直したときに iCloud から記録を戻すことはできなくなります。",
-                                 "Deletes your nickname, icon, and the songs and notes you shared with friends from iCloud, and disconnects you from all friends. This can't be undone.\nYour songs in Today, Calendar, and Look Back stay on this iPhone, but you won't be able to restore them from iCloud if you reinstall the app.",
-                                 "iCloud에 저장된 닉네임·아이콘·친구에게 공유한 곡과 메모가 삭제되고, 모든 친구와의 연결이 없어집니다. 되돌릴 수 없습니다.\n이 iPhone의 오늘·캘린더·돌아보기 기록은 남습니다. 단, 앱을 다시 설치했을 때 iCloud에서 기록을 복원할 수 없게 됩니다."))
-                    .font(.caption)
-                    .foregroundColor(.dlTextSub)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
             }
             .alert(Text(verbatim: restoreMessage ?? ""), isPresented: Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } })) {
                 Button("OK", role: .cancel) {}
