@@ -879,8 +879,9 @@ final class SocialStore: ObservableObject {
         postCache = [:]
         await syncOfficial()
         await loadOfficial()
-        // 開発者とふつうのフレンドでもあれば、その人にも「開発者」の印を付ける
-        if let creator = officialCreator {
+        // 開発者とふつうのフレンドでもあれば、その人にも「開発者」の印を付ける。
+        // 持ち主の端末では、フレンドに開発者はいない（同じ Apple アカウントのテスト端末を開発者と見なさないように）
+        if let creator = officialCreator, !isOfficialOwner {
             friends = friends.map { friend in
                 var friend = friend
                 friend.isDeveloper = links.first { $0.code == friend.code }?.creator == creator
