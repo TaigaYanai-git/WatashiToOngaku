@@ -71,7 +71,7 @@ final class AvatarStore: ObservableObject {
     }
 }
 
-/// 丸いアイコン。画像がなければヘッドホンをつけた人の初期アイコン
+/// 丸いアイコン。画像がなければ初期アイコン
 struct AvatarView: View {
     let code: String
     let version: Int
@@ -85,19 +85,13 @@ struct AvatarView: View {
             if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
-                // 写真を設定していなければ、ヘッドホンをつけた人の初期アイコン
-                ZStack {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: size * 0.5))
-                        .foregroundColor(.white.opacity(0.95))
-                        .offset(y: size * 0.08)
-                    Image(systemName: "headphones")
-                        .font(.system(size: size * 0.31, weight: .heavy))
-                        .foregroundColor(Color(white: 0.2))
-                        .offset(y: -size * 0.075)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(LinearGradient.dlPrimary)
+                // 写真を設定していなければ、人の形の初期アイコン
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.5))
+                    .foregroundColor(.white.opacity(0.95))
+                    .offset(y: size * 0.06)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(LinearGradient.dlPrimary)
             }
         }
         .frame(width: size, height: size)
