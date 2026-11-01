@@ -276,6 +276,7 @@ private struct PostCard: View {
     var isPlaying = false
     let onReport: () -> Void
     @Environment(\.openURL) private var openURL
+    @ObservedObject private var social = SocialStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -313,6 +314,7 @@ private struct PostCard: View {
                     Text(post.artist).font(.subheadline).foregroundColor(.dlTextSub).lineLimit(1)
                 }
                 Spacer(minLength: 0)
+                likeButton
             }
             if !post.memo.isEmpty {
                 Text(post.memo)
@@ -323,6 +325,11 @@ private struct PostCard: View {
                     .background(Color.dlCardTint)
                     .cornerRadius(12)
             }
+            if post.friend.isMe, !likers.isEmpty {
+                Text(verbatim: likersText)
+                    .font(.caption)
+                    .foregroundColor(.dlTextSub)
+            }
         }
         .dlCard()
         .overlay {
@@ -331,6 +338,47 @@ private struct PostCard: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: isPlaying)
+    }
+
+    private var likers: [Friend] { social.likers[post.dayKey] ?? [] }
+
+    /// フレンドの投稿にはいいねのボタン、自分の投稿にはいいねの数
+    @ViewBuilder
+    private var likeButton: some View {
+        if post.friend.isMe {
+            if !likers.isEmpty {
+                VStack(spacing: 2) {
+                    Image(systemName: "heart.fill").font(.title3).foregroundColor(.pink)
+                    Text(verbatim: "\(likers.count)").font(.caption.weight(.semibold)).foregroundColor(.dlTextSub)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(S("いいね \(likers.count)件", "\(likers.count) likes", "좋아요 \(likers.count)개"))
+            }
+        } else {
+            let liked = social.likedByMe.contains(post.id)
+            Button {
+                Task { await social.toggleLike(post) }
+            } label: {
+                Image(systemName: liked ? "heart.fill" : "heart")
+                    .font(.title2)
+                    .foregroundColor(liked ? .pink : .dlTextSub)
+                    .scaleEffect(liked ? 1.1 : 1)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: liked)
+            .sensoryFeedback(.impact(weight: .light), trigger: liked) { _, new in new }
+            .accessibilityLabel(liked ? S("いいねを取り消す", "Unlike", "좋아요 취소") : S("いいね", "Like", "좋아요"))
+        }
+    }
+
+    /// 「Mioさん、Kenさんがいいねしました」
+    private var likersText: String {
+        let names = likers.map(\.nickname)
+        return S("\(names.map { $0 + "さん" }.joined(separator: "、"))がいいねしました",
+                 "Liked by \(names.joined(separator: ", "))",
+                 "\(names.map { $0 + "님" }.joined(separator: ", "))이 좋아요를 눌렀습니다")
     }
 
     private var dayText: String {

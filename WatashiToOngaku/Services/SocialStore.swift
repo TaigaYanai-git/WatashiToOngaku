@@ -51,6 +51,10 @@ final class SocialStore: ObservableObject {
     /// タイムラインに読み込んである日数（今日を含む）
     @Published private(set) var timelineDays = SocialStore.freeTimelineDays
     @Published private(set) var isLoadingMore = false
+    /// 自分がいいねしたフレンドの投稿（レコード名）
+    @Published private(set) var likedByMe: Set<String> = []
+    /// 自分の投稿（日付）にいいねしたフレンド
+    @Published private(set) var likers: [String: [Friend]] = [:]
     @Published var lastError: String?
 
     var inviteURL: URL? {
@@ -119,6 +123,16 @@ final class SocialStore: ObservableObject {
     /// 自分のアイコン（128px の JPEG）。端末にも置いておき、コードを作り直したときにも付け直す
     private var myAvatarFile: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("my-avatar.jpg")
+    }
+
+    /// いいねしたフレンドの投稿（レコード名）。コードを作り直したときに付け直し、やめるときに消すために控える
+    private var likedPosts: Set<String> {
+        get { Set(value("social_liked") as? [String] ?? []) }
+        set {
+            // 1年より前の投稿へのいいねは控えから外す（Key-Value ストレージの容量を抑える）
+            let oldest = DayKey.string(from: Calendar.current.date(byAdding: .day, value: -Self.plusTimelineDays, to: Date()) ?? Date())
+            set(newValue.filter { String($0.suffix(10)) >= oldest }.sorted(), "social_liked")
+        }
     }
 
     private var handledRequests: Set<String> {
@@ -587,6 +601,7 @@ final class SocialStore: ObservableObject {
         timeline = posts.filter { days.contains($0.dayKey) }.sorted {
             $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
         }
+        await fetchLikes(for: timeline)
     }
 
     /// もっと前の投稿を読み込めるか（Plus は1年前まで）
@@ -608,8 +623,87 @@ final class SocialStore: ObservableObject {
             $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
         }
         let known = Set(timeline.map(\.id))
-        timeline += older.filter { !known.contains($0.id) }
+        let added = older.filter { !known.contains($0.id) }
+        timeline += added
         timelineDays = newDays
+        await fetchLikes(for: added)
+    }
+
+    // MARK: - いいね
+
+    /// いいねは "l-<投稿のレコード名>-<いいねした人のコード>" に置く。
+    /// 投稿の鍵を知っているフレンドにしか場所が分からず、投稿した人は自分のフレンドのコードで探す（検索はしない）
+    private static func likeID(post: String, code: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: "l-\(post)-\(code)")
+    }
+
+    private func likeRecord(post: String) -> CKRecord {
+        let record = CKRecord(recordType: "Like", recordID: Self.likeID(post: post, code: friendCode))
+        record["likedAt"] = Date()
+        return record
+    }
+
+    /// フレンドの投稿にいいねする／取り消す
+    func toggleLike(_ post: FriendPost) async {
+        guard state == .ready, !post.friend.isMe else { return }
+        let liking = !likedByMe.contains(post.id)
+        if liking { likedByMe.insert(post.id) } else { likedByMe.remove(post.id) }
+        guard !isPreview else { return }
+        do {
+            if liking {
+                _ = try await save(likeRecord(post: post.id))
+                likedPosts.insert(post.id)
+            } else {
+                _ = try await publicDB.modifyRecords(saving: [], deleting: [Self.likeID(post: post.id, code: friendCode)])
+                likedPosts.remove(post.id)
+            }
+        } catch {
+            // 届かなかったら元に戻す
+            if liking { likedByMe.remove(post.id) } else { likedByMe.insert(post.id) }
+            lastError = Self.describe(error)
+        }
+    }
+
+    /// 投稿のいいねを読む。フレンドの投稿は自分がいいねしたか、自分の投稿は誰がいいねしたか。
+    /// 自分の投稿へのいいねは、置いた iCloud 利用者がそのコードのフレンド本人かを確かめる（鍵を知る別のフレンドのなりすましを防ぐ）
+    private func fetchLikes(for posts: [FriendPost]) async {
+        guard state == .ready, !isPreview, !posts.isEmpty else { return }
+        let links = self.links
+        let friendsByCode = Dictionary(friends.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
+        // いいねのレコード名 → (投稿, 自分の投稿ならいいねしたフレンド)
+        var targets: [CKRecord.ID: (post: FriendPost, link: FriendLink?)] = [:]
+        for post in posts {
+            if post.friend.isMe {
+                let name = postID(secret: secret, dayKey: post.dayKey).recordName
+                for link in links { targets[Self.likeID(post: name, code: link.code)] = (post, link) }
+            } else {
+                targets[Self.likeID(post: post.id, code: friendCode)] = (post, nil)
+            }
+        }
+        var found: [CKRecord.ID: CKRecord] = [:]
+        for chunk in Array(targets.keys).chunked(200) {
+            guard let results = try? await publicDB.records(for: chunk, desiredKeys: []) else { return }
+            for case let (id, .success(record)) in results { found[id] = record }
+        }
+        var liked = likedByMe, likers = self.likers
+        for post in posts {
+            if post.friend.isMe { likers[post.dayKey] = nil } else { liked.remove(post.id) }
+        }
+        for (id, target) in targets {
+            guard let record = found[id] else { continue }
+            if let link = target.link {
+                guard record.creatorUserRecordID?.recordName == link.creator, let friend = friendsByCode[link.code] else { continue }
+                likers[target.post.dayKey, default: []].append(friend)
+            } else {
+                liked.insert(target.post.id)
+            }
+        }
+        self.likedByMe = liked
+        self.likers = likers.mapValues { $0.sorted { $0.nickname < $1.nickname } }
+        // 確かめた投稿は、iCloud の状態に合わせて控えを直す（別の端末で取り消したいいねを付け直さないように）
+        let checked = Set(posts.filter { !$0.friend.isMe }.map(\.id))
+        let saved = likedPosts.subtracting(checked).union(liked)
+        if saved != likedPosts { likedPosts = saved }
     }
 
     // MARK: - 期間の投稿（みんなのプレイリスト）
@@ -724,6 +818,12 @@ final class SocialStore: ObservableObject {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
         }
         local.removeObject(forKey: "social_uploaded_\(oldSecret)")
+        // いいねを新しいコードで付け直す（古いコードのものは消す）
+        let liked = Array(likedPosts)
+        for chunk in liked.chunked(200) {
+            _ = try? await publicDB.modifyRecords(saving: chunk.map { likeRecord(post: $0) },
+                                                  deleting: chunk.map { Self.likeID(post: $0, code: oldCode) })
+        }
         // 残っているフレンドに新しいコードと鍵を届ける
         for link in links { await sendKey(to: link.code, previousCode: oldCode) }
         for code in outgoingCodes { await sendKey(to: code) }
@@ -751,7 +851,8 @@ final class SocialStore: ObservableObject {
         guard state == .ready else { return false }
         for code in links.map(\.code) + outgoingCodes { await withdrawKey(from: code) }
         let dayKeys = Set(localEntries.map(\.dayKey)).union(uploadedStamps.keys)
-        let ids = dayKeys.map { postID(secret: secret, dayKey: $0) } + [CKRecord.ID(recordName: friendCode)]
+        let ids = dayKeys.map { postID(secret: secret, dayKey: $0) } + likedPosts.map { Self.likeID(post: $0, code: friendCode) }
+            + [CKRecord.ID(recordName: friendCode)]
         do {
             for chunk in ids.chunked(200) {
                 _ = try await publicDB.modifyRecords(saving: [], deleting: chunk)
@@ -762,7 +863,7 @@ final class SocialStore: ObservableObject {
         }
         local.removeObject(forKey: "social_uploaded_\(secret)")
         for key in ["social_nickname", "social_secret", "social_code", "social_avatarVersion", "social_privateKey",
-                    "social_links", "social_outgoing"] {
+                    "social_links", "social_outgoing", "social_liked"] {
             local.removeObject(forKey: key)
             if usesCloud { cloud.removeObject(forKey: key) }
         }
@@ -778,6 +879,8 @@ final class SocialStore: ObservableObject {
         incomingRequests = []
         outgoingRequests = []
         timeline = []
+        likedByMe = []
+        likers = [:]
         timelineDays = Self.freeTimelineDays
         state = .notSetUp
         return true
