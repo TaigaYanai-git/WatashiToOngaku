@@ -41,7 +41,7 @@ struct TimelineListBar: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 2)
-        }
+            }
             // 選んでいるタイムラインのメンバー（タップで編集）
             if let list = store.current(isPlus: plus.isPlus) {
                 memberRow(list)
