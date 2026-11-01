@@ -285,7 +285,7 @@ private struct PostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                AvatarView(code: post.friend.code, version: post.friend.avatarVersion, nickname: post.friend.nickname)
+                AvatarView(friend: post.friend)
                 VStack(alignment: .leading, spacing: 1) {
                     // 名前は1行。長ければ末尾を省き、「（あなた）」や印は残す
                     HStack(spacing: 4) {

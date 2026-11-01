@@ -71,18 +71,22 @@ final class AvatarStore: ObservableObject {
     }
 }
 
-/// 丸いアイコン。画像がなければ初期アイコン
+/// 丸いアイコン。画像がなければ初期アイコン、開発者は開発者のアイコン
 struct AvatarView: View {
     let code: String
     let version: Int
     let nickname: String
     var size: CGFloat = 36
+    /// 開発者（公式アカウント）なら、写真ではなく開発者のアイコンにする
+    var isDeveloper = false
     @ObservedObject private var store = AvatarStore.shared
 
     var body: some View {
         let _ = store.revision
         Group {
-            if let image = store.image(code: code, version: version) {
+            if isDeveloper {
+                DeveloperAvatar(size: size)
+            } else if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 DefaultAvatar(size: size)
@@ -91,6 +95,42 @@ struct AvatarView: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
+    }
+}
+
+extension AvatarView {
+    init(friend: Friend, size: CGFloat = 36) {
+        self.init(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: size,
+                  isDeveloper: friend.isOfficial || friend.isDeveloper)
+    }
+}
+
+/// 開発者のアイコン：すべてのテーマカラーのアプリアイコン9枚を円形に並べる。大きさは黄金比 φ で決める：
+/// 円の半径を r として、並べる輪の半径は r/φ、アイコンの一辺は r/φ²
+private struct DeveloperAvatar: View {
+    let size: CGFloat
+    private static let phi: CGFloat = (1 + sqrt(5)) / 2
+
+    var body: some View {
+        let phi = Self.phi
+        let radius = size / 2
+        let ring = radius / phi
+        let side = radius / (phi * phi)
+        let themes = AppIconManager.themes
+        ZStack {
+            // 初期アイコンと同じブラックの背景
+            LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            ForEach(themes.indices, id: \.self) { index in
+                // いちばん上から時計回りに並べる
+                let angle = Double(index) / Double(themes.count) * 2 * .pi - .pi / 2
+                Image("IconPreview-" + (AppIconManager.name(theme: index, isDark: false) ?? "AppIcon"))
+                    .resizable()
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous))
+                    .offset(x: ring * cos(angle), y: ring * sin(angle))
+            }
+        }
     }
 }
 

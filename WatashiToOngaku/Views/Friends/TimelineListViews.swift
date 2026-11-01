@@ -64,7 +64,7 @@ struct TimelineListBar: View {
             HStack(spacing: 8) {
                 HStack(spacing: -8) {
                     ForEach(members.prefix(5)) { friend in
-                        AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: 22)
+                        AvatarView(friend: friend, size: 22)
                             .overlay(Circle().stroke(Color.dlCard, lineWidth: 1.5))
                     }
                 }
@@ -144,7 +144,7 @@ struct TimelineListEditor: View {
                             }
                         } label: {
                             HStack(spacing: 12) {
-                                AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: 34)
+                                AvatarView(friend: friend, size: 34)
                                 Text(verbatim: friend.nickname).foregroundColor(.dlText).lineLimit(1)
                                 Spacer()
                                 Image(systemName: list.members.contains(friend.code) ? "checkmark.circle.fill" : "circle")

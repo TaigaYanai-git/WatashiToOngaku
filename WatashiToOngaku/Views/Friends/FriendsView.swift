@@ -194,7 +194,7 @@ struct OfficialCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(code: official.code, version: official.avatarVersion, nickname: official.nickname, size: 44)
+            AvatarView(friend: official, size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(official.nickname).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
@@ -347,7 +347,7 @@ struct FriendListCard: View {
             }
             ForEach(friends) { friend in
                 HStack(spacing: 12) {
-                    AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname)
+                    AvatarView(friend: friend)
                     Text(friend.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
                     if friend.isOfficial || friend.isDeveloper { OfficialBadge() }
                     Spacer()
