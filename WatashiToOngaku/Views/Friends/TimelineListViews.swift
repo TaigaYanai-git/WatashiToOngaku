@@ -42,9 +42,11 @@ struct TimelineListBar: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 2)
             }
-            // 選んでいるタイムラインのメンバー（タップで編集）
+            // 選んでいるタイムラインのメンバー（自分で作ったタイムラインはタップで編集）
             if let list = store.current(isPlus: plus.isPlus) {
-                memberRow(list)
+                memberRow(members(of: list)) { editing = list }
+            } else {
+                memberRow(social.friends, edit: nil)
             }
         }
         .sheet(item: $editing) { TimelineListEditor(list: $0) }
@@ -56,9 +58,8 @@ struct TimelineListBar: View {
         social.friends.filter { list.members.contains($0.code) }
     }
 
-    private func memberRow(_ list: TimelineList) -> some View {
-        let members = members(of: list)
-        return Button { editing = list } label: {
+    private func memberRow(_ members: [Friend], edit: (() -> Void)?) -> some View {
+        Button { edit?() } label: {
             HStack(spacing: 8) {
                 HStack(spacing: -8) {
                     ForEach(members.prefix(5)) { friend in
@@ -73,12 +74,15 @@ struct TimelineListBar: View {
                     .foregroundColor(.dlTextSub)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundColor(.dlTextLight)
+                if edit != nil {
+                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundColor(.dlTextLight)
+                }
             }
             .padding(.horizontal, 22)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(S("メンバーを編集", "Edit Members", "멤버 편집"))
+        .allowsHitTesting(edit != nil)
+        .accessibilityHint(edit == nil ? "" : S("メンバーを編集", "Edit Members", "멤버 편집"))
     }
 
     private func chip(_ title: String, count: Int, id: String) -> some View {
