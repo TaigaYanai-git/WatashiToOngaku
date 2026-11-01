@@ -4,51 +4,97 @@ import SwiftUI
 struct TimelineListBar: View {
     @ObservedObject private var store = TimelineListStore.shared
     @ObservedObject private var plus = PlusStore.shared
+    @ObservedObject private var social = SocialStore.shared
     @State private var editing: TimelineList?
     @State private var showPlus = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip(S("みんな", "Everyone", "모두"), id: TimelineListStore.allID)
-                if plus.isPlus {
-                    ForEach(store.lists) { list in
-                        chip(list.name, id: list.id)
-                            .contextMenu {
-                                Button(S("編集", "Edit", "편집"), systemImage: "pencil") { editing = list }
-                                Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { store.delete(list) }
-                            }
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    chip(S("みんな", "Everyone", "모두"), count: social.friends.count, id: TimelineListStore.allID)
+                    if plus.isPlus {
+                        ForEach(store.lists) { list in
+                            chip(list.name, count: members(of: list).count, id: list.id)
+                                .contextMenu {
+                                    Section(S("メンバー", "Members", "멤버")) {
+                                        ForEach(members(of: list)) { Text(verbatim: $0.nickname) }
+                                    }
+                                    Button(S("編集", "Edit", "편집"), systemImage: "pencil") { editing = list }
+                                    Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { store.delete(list) }
+                                }
+                        }
+                    }
+                    if !plus.isPlus || store.canAddMore {
+                        Button {
+                            if plus.isPlus { editing = TimelineList(name: "") } else { showPlus = true }
+                        } label: {
+                            Label(S("タイムラインを追加", "Add Timeline", "타임라인 추가"), systemImage: "plus")
+                                .labelStyle(.iconOnly)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(width: 34, height: 34)
+                                .background(Color.dlCard)
+                                .clipShape(Circle())
+                        }
+                        .foregroundColor(.dlPrimary)
                     }
                 }
-                if !plus.isPlus || store.canAddMore {
-                    Button {
-                        if plus.isPlus { editing = TimelineList(name: "") } else { showPlus = true }
-                    } label: {
-                        Label(S("タイムラインを追加", "Add Timeline", "타임라인 추가"), systemImage: "plus")
-                            .labelStyle(.iconOnly)
-                            .font(.subheadline.weight(.semibold))
-                            .frame(width: 34, height: 34)
-                            .background(Color.dlCard)
-                            .clipShape(Circle())
-                    }
-                    .foregroundColor(.dlPrimary)
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 2)
+        }
+            // 選んでいるタイムラインのメンバー（タップで編集）
+            if let list = store.current(isPlus: plus.isPlus) {
+                memberRow(list)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 2)
         }
         .sheet(item: $editing) { TimelineListEditor(list: $0) }
         .sheet(isPresented: $showPlus) { PlusView() }
     }
 
-    private func chip(_ title: String, id: String) -> some View {
+    /// タイムラインに入っているフレンド（フレンドをやめた人は数えない）
+    private func members(of list: TimelineList) -> [Friend] {
+        social.friends.filter { list.members.contains($0.code) }
+    }
+
+    private func memberRow(_ list: TimelineList) -> some View {
+        let members = members(of: list)
+        return Button { editing = list } label: {
+            HStack(spacing: 8) {
+                HStack(spacing: -8) {
+                    ForEach(members.prefix(5)) { friend in
+                        AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: 22)
+                            .overlay(Circle().stroke(Color.dlCard, lineWidth: 1.5))
+                    }
+                }
+                Text(verbatim: members.isEmpty
+                     ? S("メンバーがいません。タップして追加", "No members. Tap to add", "멤버가 없습니다. 탭하여 추가")
+                     : members.map(\.nickname).joined(separator: S("、", ", ", ", ")))
+                    .font(.caption)
+                    .foregroundColor(.dlTextSub)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundColor(.dlTextLight)
+            }
+            .padding(.horizontal, 22)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(S("メンバーを編集", "Edit Members", "멤버 편집"))
+    }
+
+    private func chip(_ title: String, count: Int, id: String) -> some View {
         let selected = (store.current(isPlus: plus.isPlus)?.id ?? TimelineListStore.allID) == id
         return Button {
             store.selectedID = id
         } label: {
-            Text(verbatim: title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                Text(verbatim: title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                // 人数
+                Text(verbatim: "\(count)")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundColor(selected ? .white.opacity(0.8) : .dlTextSub)
+            }
                 .padding(.horizontal, 14)
                 .frame(height: 34)
                 .foregroundColor(selected ? .white : .dlText)
