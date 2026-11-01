@@ -91,7 +91,9 @@ struct AvatarView: View {
                     .foregroundColor(.white.opacity(0.95))
                     .offset(y: size * 0.06)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(LinearGradient.dlPrimary)
+                    // テーマカラーに左右されず、ブラックのテーマと同じ色にする
+                    .background(LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing))
             }
         }
         .frame(width: size, height: size)
