@@ -71,7 +71,7 @@ final class AvatarStore: ObservableObject {
     }
 }
 
-/// 丸いアイコン。画像がなければ名前の頭文字
+/// 丸いアイコン。画像がなければ初期アイコン
 struct AvatarView: View {
     let code: String
     let version: Int
@@ -85,9 +85,11 @@ struct AvatarView: View {
             if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
-                Text(String(nickname.prefix(1)))
-                    .font(.system(size: size * 0.45, weight: .semibold))
-                    .foregroundColor(.white)
+                // 写真を設定していなければ、人の形の初期アイコン
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.5))
+                    .foregroundColor(.white.opacity(0.95))
+                    .offset(y: size * 0.06)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(LinearGradient.dlPrimary)
             }

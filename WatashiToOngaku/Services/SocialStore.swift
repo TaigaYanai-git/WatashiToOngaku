@@ -339,7 +339,7 @@ final class SocialStore: ObservableObject {
         }
     }
 
-    /// アイコンの写真をはずす（名前の頭文字に戻す）
+    /// アイコンの写真をはずす（初期アイコンに戻す）
     func removeAvatar() async -> Bool {
         guard state == .ready else { return false }
         let previous = avatarVersion
