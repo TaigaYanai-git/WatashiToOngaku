@@ -52,7 +52,7 @@ struct ProfileHeader: View {
                 editingName = true
             } label: {
                 HStack(spacing: 4) {
-                    Text(social.nickname).font(.headline).foregroundColor(.dlText)
+                    Text(social.nickname).font(.headline).foregroundColor(.dlText).lineLimit(1)
                     Image(systemName: "pencil").font(.caption).foregroundColor(.dlTextSub)
                 }
             }

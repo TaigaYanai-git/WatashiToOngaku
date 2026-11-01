@@ -145,7 +145,7 @@ struct TimelineListEditor: View {
                         } label: {
                             HStack(spacing: 12) {
                                 AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: 34)
-                                Text(verbatim: friend.nickname).foregroundColor(.dlText)
+                                Text(verbatim: friend.nickname).foregroundColor(.dlText).lineLimit(1)
                                 Spacer()
                                 Image(systemName: list.members.contains(friend.code) ? "checkmark.circle.fill" : "circle")
                                     .font(.title3)

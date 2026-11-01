@@ -236,6 +236,8 @@ struct OfficialBadge: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(Color.dlPrimaryBg))
+            // 名前が長くても、印は縮めない
+            .fixedSize()
     }
 }
 
@@ -346,7 +348,7 @@ struct FriendListCard: View {
             ForEach(friends) { friend in
                 HStack(spacing: 12) {
                     AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname)
-                    Text(friend.nickname).font(.subheadline).foregroundColor(.dlText)
+                    Text(friend.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
                     if friend.isOfficial { OfficialBadge() }
                     Spacer()
                     Button { removing = friend } label: {

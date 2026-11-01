@@ -287,29 +287,38 @@ private struct PostCard: View {
             HStack(spacing: 10) {
                 AvatarView(code: post.friend.code, version: post.friend.avatarVersion, nickname: post.friend.nickname)
                 VStack(alignment: .leading, spacing: 1) {
+                    // 名前は1行。長ければ末尾を省き、「（あなた）」や印は残す
                     HStack(spacing: 4) {
-                        Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)", "\(post.friend.nickname) (나)") : post.friend.nickname)
+                        Text(verbatim: post.friend.nickname)
                             .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
-                        if post.friend.isOfficial { OfficialBadge() }
-                        if post.friend.isFollower {
-                            Text(verbatim: S("開発者のフレンド", "Developer's friend", "개발자의 친구"))
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(.dlPrimary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.dlPrimaryBg))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Group {
+                            if post.friend.isMe {
+                                Text(verbatim: S("（あなた）", "(you)", "(나)"))
+                                    .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                            }
+                            if post.friend.isOfficial { OfficialBadge() }
+                            if post.friend.isFollower {
+                                Text(verbatim: S("開発者のフレンド", "Developer's friend", "개발자의 친구"))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(.dlPrimary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.dlPrimaryBg))
+                            }
                         }
+                        .fixedSize()
                     }
-                    Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
+                    // 日付と、いつ選んだか（「2時間前」）。流れている曲なら印
+                    HStack(spacing: 6) {
+                        Text(verbatim: "\(dayText) ・ \(post.postedAt.formatted(.relative(presentation: .named).locale(.app)))")
+                            .font(.caption).foregroundColor(.dlTextSub)
+                            .lineLimit(1)
+                        if isPlaying { NowPlayingBadge() }
+                    }
                 }
-                Spacer()
-                if isPlaying {
-                    NowPlayingBadge()
-                } else {
-                    Text(post.postedAt, style: .relative)
-                        .font(.caption2)
-                        .foregroundColor(.dlTextLight)
-                }
+                Spacer(minLength: 0)
                 Menu {
                     if let link = post.appleMusicURL.flatMap(URL.init(string:)) {
                         Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
