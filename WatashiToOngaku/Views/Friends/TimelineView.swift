@@ -130,6 +130,10 @@ struct TimelineView: View {
                             Button(S("フレンドを追加", "Add Friends")) { showFriends = true }
                                 .buttonStyle(PrimaryButtonStyle())
                                 .padding(.horizontal, 40)
+                            // フレンドがまだいない人は、まず公式アカウントの曲から
+                            if let official = social.official, !social.followsOfficial, !social.isOfficialOwner {
+                                OfficialCard(official: official).padding(.top, 8)
+                            }
                         }
                     }
                     .padding(.top, 60)
@@ -283,8 +287,11 @@ private struct PostCard: View {
             HStack(spacing: 10) {
                 AvatarView(code: post.friend.code, version: post.friend.avatarVersion, nickname: post.friend.nickname)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)", "\(post.friend.nickname) (나)") : post.friend.nickname)
-                        .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                    HStack(spacing: 4) {
+                        Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)", "\(post.friend.nickname) (나)") : post.friend.nickname)
+                            .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                        if post.friend.isOfficial { OfficialBadge() }
+                    }
                     Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
                 }
                 Spacer()
@@ -299,7 +306,11 @@ private struct PostCard: View {
                     if let link = post.appleMusicURL.flatMap(URL.init(string:)) {
                         Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
                     }
-                    if !post.friend.isMe {
+                    if post.friend.isOfficial {
+                        Button(S("フォローをやめる", "Unfollow", "팔로우 취소"), systemImage: "person.badge.minus") {
+                            Task { await social.setFollowsOfficial(false) }
+                        }
+                    } else if !post.friend.isMe {
                         Button(S("通報してブロック", "Report & Block"), systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
                     }
                 } label: {
@@ -345,7 +356,9 @@ private struct PostCard: View {
     /// フレンドの投稿にはいいねのボタン、自分の投稿にはいいねの数
     @ViewBuilder
     private var likeButton: some View {
-        if post.friend.isMe {
+        if post.friend.isOfficial {
+            EmptyView()
+        } else if post.friend.isMe {
             if !likers.isEmpty {
                 VStack(spacing: 2) {
                     Image(systemName: "heart.fill").font(.title3).foregroundColor(.pink)

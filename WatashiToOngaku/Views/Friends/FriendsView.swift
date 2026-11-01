@@ -19,6 +19,7 @@ struct FriendsView: View {
                 VStack(spacing: 18) {
                     if !social.incomingRequests.isEmpty { incomingCard }
                     myCard
+                    if let official = social.official, !social.isOfficialOwner { OfficialCard(official: official) }
                     addCard
                     if !social.outgoingRequests.isEmpty { outgoingCard }
                     friendList
@@ -221,6 +222,55 @@ struct FriendsView: View {
 }
 
 /// 自分の招待リンクの QR コード
+/// 公式アカウント：フォローすると開発者の毎日の一曲がタイムラインに流れる（承認なし）
+struct OfficialCard: View {
+    let official: Friend
+    @ObservedObject private var social = SocialStore.shared
+    @State private var working = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(code: official.code, version: official.avatarVersion, nickname: official.nickname, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(official.nickname).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
+                    OfficialBadge()
+                }
+                Text(verbatim: S("開発者の毎日の一曲が流れます", "The developer's daily song", "개발자의 매일의 한 곡"))
+                    .font(.caption).foregroundColor(.dlTextSub)
+            }
+            Spacer(minLength: 0)
+            let follows = social.followsOfficial
+            Button {
+                working = true
+                Task {
+                    await social.setFollowsOfficial(!follows)
+                    working = false
+                }
+            } label: {
+                Text(verbatim: follows ? S("フォロー中", "Following", "팔로잉") : S("フォロー", "Follow", "팔로우"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(follows ? .dlPrimary : .white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(follows ? AnyShapeStyle(Color.dlPrimaryBg) : AnyShapeStyle(LinearGradient.dlPrimary)))
+            }
+            .disabled(working)
+        }
+        .dlCard()
+    }
+}
+
+/// 公式アカウントの印
+struct OfficialBadge: View {
+    var body: some View {
+        Image(systemName: "checkmark.seal.fill")
+            .font(.caption)
+            .foregroundColor(.dlPrimary)
+            .accessibilityLabel(S("公式", "Official", "공식"))
+    }
+}
+
 private struct MyQRSheet: View {
     @ObservedObject private var social = SocialStore.shared
     @Environment(\.dismiss) private var dismiss

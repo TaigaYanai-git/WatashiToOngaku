@@ -9,7 +9,6 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
-    @AppStorage(AppIconManager.followsThemeKey) private var iconFollowsTheme = false
     @State private var showIconPicker = false
     @ObservedObject private var plus = PlusStore.shared
     @State private var showPlus = false
@@ -104,9 +103,9 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
             }
-            Text(verbatim: S("カスタム（Plus）の色は、アプリのアイコンには反映されません",
-                             "Custom colors (Plus) aren't applied to the app icon",
-                             "사용자 지정 색상（Plus）은 앱 아이콘에는 반영되지 않습니다"))
+            Text(verbatim: S("アプリのアイコンもこの色になります（iOS のお知らせが出ます）。カスタム（Plus）の色はアイコンには反映されません",
+                             "The app icon changes to this color too (iOS shows a notice). Custom colors (Plus) aren't applied to the icon",
+                             "앱 아이콘도 이 색상으로 바뀝니다（iOS 알림이 표시됩니다）. 사용자 지정 색상（Plus）은 아이콘에는 반영되지 않습니다"))
                 .font(.caption2)
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
@@ -158,33 +157,6 @@ struct SettingsView: View {
             .cornerRadius(16)
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-
-            // アプリアイコンもテーマカラーに合わせる
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.dlPrimaryBg).frame(width: 36, height: 36)
-                    Image(systemName: "app.badge").font(.body).foregroundColor(.dlPrimary)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
-                        .font(.subheadline)
-                        .foregroundColor(.dlText)
-                    Text(verbatim: S("切り替えるたびに iOS のお知らせが出ます", "iOS shows a notice each time it changes"))
-                        .font(.caption2)
-                        .foregroundColor(.dlTextSub)
-                }
-                Spacer()
-                Toggle("", isOn: $iconFollowsTheme)
-                    .tint(.dlPrimary)
-                    .labelsHidden()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.dlCard)
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
-            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
-            .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
 
             // Plus：ダークモードやテーマカラーに左右されないアイコンに固定する
             Button {
@@ -382,6 +354,9 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(S("フレンド", "Friends"))
             VStack(spacing: 10) {
+                if social.isOfficialOwner {
+                    officialOwnerRow
+                }
                 row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
                     detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)", "\(social.blockedUsers.count)명")) {
                     showBlocked = true
@@ -430,6 +405,25 @@ struct SettingsView: View {
         }
     }
 
+    /// 公式アカウントの持ち主だけ：自分の曲を公式として公開する
+    private var officialOwnerRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { social.publishesOfficial }, set: { on in Task { await social.setPublishesOfficial(on) } })) {
+                Label(S("公式アカウントとして公開", "Publish as Official Account", "공식 계정으로 공개"), systemImage: "checkmark.seal")
+                    .font(.subheadline)
+                    .foregroundColor(.dlText)
+            }
+            .tint(.dlPrimary)
+            Text(verbatim: S("共有した曲とメモが、フォローした人全員に見えます。フォローはコード「\(SocialStore.officialCode)」で。",
+                             "Your shared songs and notes are visible to all followers. Follow code: \(SocialStore.officialCode)",
+                             "공유한 곡과 메모가 모든 팔로워에게 보입니다. 팔로우 코드: \(SocialStore.officialCode)"))
+                .font(.caption)
+                .foregroundColor(.dlTextSub)
+        }
+        .dlCard()
+        .padding(.horizontal, 20)
+    }
+
     // MARK: - Settings
 
     private var settingsSection: some View {
@@ -463,6 +457,12 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
             #if DEBUG
             Toggle(S("開発用：Plus を有効にする", "Debug: Enable Plus"), isOn: $plus.debugOverride)
+                .font(.caption)
+                .tint(.dlPrimary)
+                .padding(.horizontal, 20)
+            // この端末（の Apple アカウント）を公式アカウントの持ち主にする。iCloud に控えるので App Store 版にも引き継ぐ
+            Toggle(S("開発用：公式アカウントの持ち主にする", "Debug: Official Account Owner"),
+                   isOn: Binding(get: { social.isOfficialOwner }, set: { social.isOfficialOwner = $0 }))
                 .font(.caption)
                 .tint(.dlPrimary)
                 .padding(.horizontal, 20)
