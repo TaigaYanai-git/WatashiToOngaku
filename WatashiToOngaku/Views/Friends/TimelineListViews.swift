@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// タイムラインの上に出す切り替えのボタン。「＋」で新しいタイムラインを作る（Plus）
+/// タイムラインの上に出す切り替えのボタン。「＋」で新しいタイムラインを作る（無料で1つ、Plus なら5つまで）
 struct TimelineListBar: View {
     @ObservedObject private var store = TimelineListStore.shared
     @ObservedObject private var plus = PlusStore.shared
@@ -13,8 +13,8 @@ struct TimelineListBar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     chip(S("みんな", "Everyone", "모두"), count: social.friends.count, id: TimelineListStore.allID)
-                    if plus.isPlus {
-                        ForEach(store.lists) { list in
+                    Group {
+                        ForEach(store.available(isPlus: plus.isPlus)) { list in
                             chip(list.name, count: members(of: list).count, id: list.id)
                                 .contextMenu {
                                     Section(S("メンバー", "Members", "멤버")) {
@@ -25,9 +25,10 @@ struct TimelineListBar: View {
                                 }
                         }
                     }
-                    if !plus.isPlus || store.canAddMore {
+                    // 作れる数を超えていたら、Plus でない人には Plus を案内する
+                    if !plus.isPlus || store.canAddMore(isPlus: true) {
                         Button {
-                            if plus.isPlus { editing = TimelineList(name: "") } else { showPlus = true }
+                            if store.canAddMore(isPlus: plus.isPlus) { editing = TimelineList(name: "") } else { showPlus = true }
                         } label: {
                             Label(S("タイムラインを追加", "Add Timeline", "타임라인 추가"), systemImage: "plus")
                                 .labelStyle(.iconOnly)
@@ -170,7 +171,7 @@ struct TimelineListEditor: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(S("保存", "Save", "저장")) {
                         list.name = trimmedName
-                        TimelineListStore.shared.save(list)
+                        TimelineListStore.shared.save(list, isPlus: PlusStore.shared.isPlus)
                         TimelineListStore.shared.selectedID = list.id
                         dismiss()
                     }

@@ -1056,7 +1056,9 @@ final class SocialStore: ObservableObject {
 
     /// フォローしている公式アカウントの投稿（持ち主の端末では自分の投稿として出るので取らない）
     private func officialPosts(days: [String]) async -> [FriendPost] {
-        guard followsOfficial, !isOfficialOwner, let official, let creator = officialCreator else { return [] }
+        guard followsOfficial, !isOfficialOwner, let official, let creator = officialCreator,
+              // 公式の持ち主とフレンドなら、同じ曲がフレンドの投稿として出るので重ねて出さない
+              !links.contains(where: { $0.creator == creator }) else { return [] }
         let ids = days.map(Self.officialPostID)
         for chunk in ids.filter({ postCache[$0.recordName] == nil }).chunked(200) {
             guard let found = try? await publicDB.records(for: chunk) else { continue }

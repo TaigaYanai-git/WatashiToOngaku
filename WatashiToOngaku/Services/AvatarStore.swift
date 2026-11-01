@@ -85,19 +85,36 @@ struct AvatarView: View {
             if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
-                // 写真を設定していなければ、人の形の初期アイコン
-                Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.5))
-                    .foregroundColor(.white.opacity(0.95))
-                    .offset(y: size * 0.06)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // テーマカラーに左右されず、ブラックのテーマと同じ色にする
-                    .background(LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing))
+                DefaultAvatar(size: size)
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
+    }
+}
+
+/// 写真を設定していないときの、人の形の初期アイコン。比率はすべて黄金比 φ で決める：
+/// 頭の直径と頭の中心の高さは 1/φ²、体の上端は 1/φ、体の幅は頭の直径 × φ（＝ 1/φ）
+private struct DefaultAvatar: View {
+    let size: CGFloat
+    private static let phi: CGFloat = (1 + sqrt(5)) / 2
+
+    var body: some View {
+        let phi = Self.phi
+        let head = size / (phi * phi)
+        let bodyWidth = head * phi
+        ZStack(alignment: .top) {
+            // テーマカラーに左右されず、ブラックのテーマと同じ色にする
+            LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle()
+                .frame(width: head, height: head)
+                .offset(y: size / (phi * phi) - head / 2)
+            Ellipse()
+                .frame(width: bodyWidth, height: bodyWidth / phi * 2)
+                .offset(y: size / phi)
+        }
+        .foregroundColor(.white.opacity(0.95))
     }
 }

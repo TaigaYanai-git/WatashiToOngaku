@@ -1,6 +1,6 @@
 import Foundation
 
-/// フレンドを分けて見るタイムライン（Plus）。「みんな」のほかに、入れるフレンドを選んだタイムラインを作れる。
+/// フレンドを分けて見るタイムライン（無料で1つ、Plus なら5つまで）。「みんな」のほかに、入れるフレンドを選んだタイムラインを作れる。
 /// 投稿の取り出し方は変えず、端末内で絞り込むだけなので、iCloud の読み書きは増えない
 struct TimelineList: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
@@ -15,6 +15,8 @@ final class TimelineListStore: ObservableObject {
 
     /// 「みんな」のほかに作れるタイムラインの数
     static let maxCustomCount = 5
+    /// Plus でなくても作れる数
+    static let freeCustomCount = 1
     /// 「みんな」のタイムライン（選んでいないときもこれ）
     static let allID = "all"
 
@@ -35,12 +37,18 @@ final class TimelineListStore: ObservableObject {
         selectedID = UserDefaults.standard.string(forKey: Self.selectedKey) ?? Self.allID
     }
 
-    var canAddMore: Bool { lists.count < Self.maxCustomCount }
+    /// 使えるタイムライン。Plus でなくなったら（作ったものは残したまま）最初の1つだけ
+    func available(isPlus: Bool) -> [TimelineList] {
+        isPlus ? lists : Array(lists.prefix(Self.freeCustomCount))
+    }
 
-    /// 今選んでいるタイムライン。Plus でなくなったら（作ったものは残したまま）「みんな」を見せる
+    func canAddMore(isPlus: Bool) -> Bool {
+        lists.count < (isPlus ? Self.maxCustomCount : Self.freeCustomCount)
+    }
+
+    /// 今選んでいるタイムライン（使えないものを選んでいたら「みんな」）
     func current(isPlus: Bool) -> TimelineList? {
-        guard isPlus else { return nil }
-        return lists.first { $0.id == selectedID }
+        available(isPlus: isPlus).first { $0.id == selectedID }
     }
 
     /// そのタイムラインに出す投稿か（自分の投稿はどのタイムラインにも出す）
@@ -49,10 +57,10 @@ final class TimelineListStore: ObservableObject {
         return post.friend.isMe || list.members.contains(post.friend.code)
     }
 
-    func save(_ list: TimelineList) {
+    func save(_ list: TimelineList, isPlus: Bool) {
         if let index = lists.firstIndex(where: { $0.id == list.id }) {
             lists[index] = list
-        } else if canAddMore {
+        } else if canAddMore(isPlus: isPlus) {
             lists.append(list)
         }
         persist()

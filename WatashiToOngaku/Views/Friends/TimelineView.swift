@@ -327,13 +327,16 @@ private struct PostCard: View {
             }
             HStack(spacing: 14) {
                 PlayableArtwork(id: post.id, artworkURL: post.artworkURL, previewURL: post.previewURL,
-                                size: 88, cornerRadius: 12, songID: post.songID, clipStart: post.clipStart)
+                                size: Self.artworkSize, cornerRadius: 12, songID: post.songID, clipStart: post.clipStart)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(post.title).font(.headline).foregroundColor(.dlText).lineLimit(2)
                     Text(post.artist).font(.subheadline).foregroundColor(.dlTextSub).lineLimit(1)
                 }
                 Spacer(minLength: 0)
+                // 黄金比：ハートの中心を、ジャケットの上から 1/φ（約 61.8%）の高さに置く
                 likeButton
+                    .padding(.top, Self.artworkSize / Self.goldenRatio - Self.heartBox / 2)
+                    .frame(height: Self.artworkSize, alignment: .top)
             }
             if !post.memo.isEmpty {
                 Text(post.memo)
@@ -361,14 +364,23 @@ private struct PostCard: View {
 
     private var likers: [Friend] { social.likers[post.dayKey] ?? [] }
 
+    private static let artworkSize: CGFloat = 88
+    private static let goldenRatio: CGFloat = 1.618
+    /// ハートを押せる範囲
+    private static let heartBox: CGFloat = 36
+    private static let heartSize: CGFloat = 17
+
     /// フレンドの投稿にはいいねのボタン、自分の投稿にはいいねの数
     @ViewBuilder
     private var likeButton: some View {
         if post.friend.isMe {
             if !likers.isEmpty {
-                VStack(spacing: 2) {
-                    Image(systemName: "heart.fill").font(.title3).foregroundColor(.pink)
-                    Text(verbatim: "\(likers.count)").font(.caption.weight(.semibold)).foregroundColor(.dlTextSub)
+                VStack(spacing: -6) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: Self.heartSize))
+                        .foregroundColor(.pink)
+                        .frame(width: Self.heartBox, height: Self.heartBox)
+                    Text(verbatim: "\(likers.count)").font(.caption2.weight(.semibold)).foregroundColor(.dlTextSub)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(S("いいね \(likers.count)件", "\(likers.count) likes", "좋아요 \(likers.count)개"))
@@ -379,10 +391,10 @@ private struct PostCard: View {
                 Task { await social.toggleLike(post) }
             } label: {
                 Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.title2)
+                    .font(.system(size: Self.heartSize))
                     .foregroundColor(liked ? .pink : .dlTextSub)
-                    .scaleEffect(liked ? 1.1 : 1)
-                    .frame(width: 44, height: 44)
+                    .scaleEffect(liked ? 1.15 : 1)
+                    .frame(width: Self.heartBox, height: Self.heartBox)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
