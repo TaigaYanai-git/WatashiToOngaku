@@ -43,7 +43,8 @@ struct TimelineView: View {
                 if social.state == .ready {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button { showProfile = true } label: {
-                            AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 30)
+                            AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 30,
+                                       isDeveloper: social.isOfficialOwner)
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }

@@ -1084,7 +1084,7 @@ final class SocialStore: ObservableObject {
 
     private var me: Friend {
         Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true,
-               isDeveloper: isOfficialOwner && publishesOfficial)
+               isDeveloper: isOfficialOwner)
     }
 
     /// 期間内の、フレンドと自分の投稿。

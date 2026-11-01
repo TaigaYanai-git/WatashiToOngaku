@@ -105,31 +105,60 @@ extension AvatarView {
     }
 }
 
-/// 開発者のアイコン：すべてのテーマカラーのアプリアイコン9枚を円形に並べる。大きさは黄金比 φ で決める：
-/// 円の半径を r として、並べる輪の半径は r/φ、アイコンの一辺は r/φ²
+/// 開発者のアイコン：アプリアイコンと同じレコードを、ブラックとホワイトを除くテーマカラーの7枚、輪に重ねて並べる。
+/// 大きさは黄金比 φ で決める：円の半径を r として、盤の半径も、並べる輪の半径も r/φ²
 private struct DeveloperAvatar: View {
     let size: CGFloat
     private static let phi: CGFloat = (1 + sqrt(5)) / 2
+    /// ローズ〜ラベンダー
+    private static let colors = ThemeStore.accents.dropFirst(2).map(\.primary)
 
     var body: some View {
-        let phi = Self.phi
-        let radius = size / 2
-        let ring = radius / phi
-        let side = radius / (phi * phi)
-        let themes = AppIconManager.themes
+        let unit = size / 2 / (Self.phi * Self.phi)
         ZStack {
             // 初期アイコンと同じブラックの背景
             LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
-            ForEach(themes.indices, id: \.self) { index in
+            ForEach(Self.colors.indices, id: \.self) { index in
                 // いちばん上から時計回りに並べる
-                let angle = Double(index) / Double(themes.count) * 2 * .pi - .pi / 2
-                Image("IconPreview-" + (AppIconManager.name(theme: index, isDark: false) ?? "AppIcon"))
-                    .resizable()
-                    .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous))
-                    .offset(x: ring * cos(angle), y: ring * sin(angle))
+                let angle = Double(index) / Double(Self.colors.count) * 2 * .pi - .pi / 2
+                RecordDisc(color: Self.colors[index])
+                    .frame(width: unit * 2, height: unit * 2)
+                    .shadow(color: .black.opacity(0.25), radius: size * 0.015)
+                    .offset(x: unit * cos(angle), y: unit * sin(angle))
             }
+        }
+    }
+}
+
+/// アプリアイコンのレコード1枚（scripts/make_icons.py と同じく、半径 360 の盤を基準にした溝・光・ラベル）
+private struct RecordDisc: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let radius = size.width / 2
+            let k = radius / 360
+            let center = CGPoint(x: radius, y: radius)
+            func circle(_ r: CGFloat) -> Path {
+                Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+            }
+            context.fill(circle(radius), with: .color(color))
+            for groove in stride(from: 330.0, to: 153, by: -22) {
+                context.stroke(circle(groove * k), with: .color(.white.opacity(0.07)), lineWidth: 3 * k)
+            }
+            // 左上と右下に光の筋
+            for flip in [0.0, 180.0] {
+                for (r, start, end) in [(280.0, -126.0, -166.0), (230.0, -123.0, -149.0)] {
+                    var arc = Path()
+                    arc.addArc(center: center, radius: r * k, startAngle: .degrees(start + flip),
+                               endAngle: .degrees(end + flip), clockwise: true)
+                    context.stroke(arc, with: .color(.white.opacity(0.35)), style: StrokeStyle(lineWidth: 18 * k, lineCap: .round))
+                }
+            }
+            var label = circle(118 * k)
+            label.addPath(circle(18 * k))
+            context.fill(label, with: .color(.white), style: FillStyle(eoFill: true))
         }
     }
 }
