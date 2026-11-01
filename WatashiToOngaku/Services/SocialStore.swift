@@ -223,9 +223,12 @@ final class SocialStore: ObservableObject {
         guard isOfficialOwner, publishesOfficial, state == .ready, !isPreview else { return }
         let profile = (try? await publicDB.record(for: Self.officialProfileID))
             ?? CKRecord(recordType: "FriendCode", recordID: Self.officialProfileID)
-        if profile["nickname"] as? String != nickname || (avatarVersion > 0 && profile["avatarVersion"] as? Int != avatarVersion) {
+        if profile["nickname"] as? String != nickname || profile["avatarVersion"] as? Int ?? 0 != avatarVersion {
             profile["nickname"] = nickname
-            if avatarVersion > 0, FileManager.default.fileExists(atPath: myAvatarFile.path) {
+            if avatarVersion == 0 {
+                profile["avatar"] = nil
+                profile["avatarVersion"] = nil
+            } else if FileManager.default.fileExists(atPath: myAvatarFile.path) {
                 profile["avatar"] = CKAsset(fileURL: myAvatarFile)
                 profile["avatarVersion"] = avatarVersion
                 AvatarStore.shared.storeOwn((try? Data(contentsOf: myAvatarFile)) ?? Data(), code: Self.officialProfileID.recordName,
@@ -310,6 +313,10 @@ final class SocialStore: ObservableObject {
            FileManager.default.fileExists(atPath: myAvatarFile.path) {
             record["avatar"] = CKAsset(fileURL: myAvatarFile)
             record["avatarVersion"] = avatarVersion
+        } else if avatarVersion == 0, record["avatarVersion"] != nil {
+            // アイコンをはずした
+            record["avatar"] = nil
+            record["avatarVersion"] = nil
         }
         _ = try await save(record)
     }
@@ -330,6 +337,25 @@ final class SocialStore: ObservableObject {
             lastError = Self.describe(error)
             return false
         }
+    }
+
+    /// アイコンの写真をはずす（名前の頭文字に戻す）
+    func removeAvatar() async -> Bool {
+        guard state == .ready else { return false }
+        let previous = avatarVersion
+        avatarVersion = 0
+        set(0, "social_avatarVersion")
+        do {
+            try await publishFriendCode()
+        } catch {
+            avatarVersion = previous
+            set(previous, "social_avatarVersion")
+            lastError = Self.describe(error)
+            return false
+        }
+        try? FileManager.default.removeItem(at: myAvatarFile)
+        await syncOfficial()
+        return true
     }
 
     /// 新しいニックネームにする

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
+    @AppStorage(AppIconManager.followsThemeKey) private var iconFollowsTheme = false
     @State private var showIconPicker = false
     @ObservedObject private var plus = PlusStore.shared
     @State private var showPlus = false
@@ -103,9 +104,9 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
             }
-            Text(verbatim: S("アプリのアイコンもこの色になります（iOS のお知らせが出ます）。カスタム（Plus）の色はアイコンには反映されません",
-                             "The app icon changes to this color too (iOS shows a notice). Custom colors (Plus) aren't applied to the icon",
-                             "앱 아이콘도 이 색상으로 바뀝니다（iOS 알림이 표시됩니다）. 사용자 지정 색상（Plus）은 아이콘에는 반영되지 않습니다"))
+            Text(verbatim: S("カスタム（Plus）の色は、アプリのアイコンには反映されません",
+                             "Custom colors (Plus) aren't applied to the app icon",
+                             "사용자 지정 색상（Plus）은 앱 아이콘에는 반영되지 않습니다"))
                 .font(.caption2)
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
@@ -157,6 +158,33 @@ struct SettingsView: View {
             .cornerRadius(16)
             .padding(.horizontal, 20)
             .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+
+            // アプリアイコンもテーマカラーに合わせる
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.dlPrimaryBg).frame(width: 36, height: 36)
+                    Image(systemName: "app.badge").font(.body).foregroundColor(.dlPrimary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: S("アイコンもテーマカラーにする", "Match App Icon to Theme"))
+                        .font(.subheadline)
+                        .foregroundColor(.dlText)
+                    Text(verbatim: S("切り替えるたびに iOS のお知らせが出ます", "iOS shows a notice each time it changes"))
+                        .font(.caption2)
+                        .foregroundColor(.dlTextSub)
+                }
+                Spacer()
+                Toggle("", isOn: $iconFollowsTheme)
+                    .tint(.dlPrimary)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.dlCard)
+            .cornerRadius(16)
+            .padding(.horizontal, 20)
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+            .onChange(of: iconFollowsTheme) { _, _ in AppIconManager.apply() }
 
             // Plus：ダークモードやテーマカラーに左右されないアイコンに固定する
             Button {

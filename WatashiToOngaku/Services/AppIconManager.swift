@@ -6,6 +6,7 @@ import UIKit
 /// 切り替えるたびに iOS が「アイコンを変更しました」と表示する（アプリからは消せない）。
 @MainActor
 enum AppIconManager {
+    static let followsThemeKey = "icon_followsTheme"
     /// Plus：固定するアイコン（テーマカラーの番号。-1 なら固定しない）と、ダークのアイコンにするか
     static let fixedThemeKey = "icon_fixedTheme"
     static let fixedDarkKey = "icon_fixedDark"
@@ -14,6 +15,8 @@ enum AppIconManager {
 
     /// ThemeStore.accents と同じ並び。ブラック（0）は標準のアイコン
     static let themes = ["", "White", "Rose", "Coral", "Sunset", "Lemon", "Mint", "Sky", "Lavender"]
+
+    static var followsTheme: Bool { UserDefaults.standard.bool(forKey: followsThemeKey) }
 
     /// 固定しているアイコン（Plus のときだけ効く）
     static var fixed: (theme: Int, isDark: Bool)? {
@@ -39,10 +42,10 @@ enum AppIconManager {
         return theme.isEmpty ? nil : base
     }
 
-    /// 固定していなければテーマカラーに合わせる。カスタムカラーのアイコンはないので、標準（ブラック）のアイコンになる
+    /// カスタムカラーのアイコンはないので、テーマに合わせるときも標準（ブラック）のアイコンになる
     static func iconName(accentIndex: Int, isDark: Bool) -> String? {
         if let fixed { return name(theme: fixed.theme, isDark: fixed.isDark) }
-        return name(theme: accentIndex, isDark: isDark)
+        return name(theme: followsTheme ? accentIndex : 0, isDark: isDark)
     }
 
     /// 起動時：アプリの設定とアイコンがずれていたら合わせる（固定をやめた直後のアイコンはそのまま）
