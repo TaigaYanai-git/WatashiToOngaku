@@ -6,20 +6,24 @@ struct ArtworkView: View {
     let url: String
     var cornerRadius: CGFloat = 12
     @ObservedObject private var cache = ArtworkCache.shared
-    @State private var loaded: UIImage?
+    /// 読み込んだ画像を URL と組で覚える。日付や曲が変わって URL が変わったら使わない
+    @State private var loaded: (url: String, image: UIImage)?
 
     var body: some View {
         Group {
             if url.hasPrefix("sample:"), let n = Int(url.dropFirst(7)) {
                 SampleArtwork(index: n)
-            } else if let image = loaded ?? cache.cached(url) {
+            } else if let image = cache.cached(url) ?? (loaded?.url == url ? loaded?.image : nil) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 ZStack {
                     Color.dlPrimaryBg
                     Image(systemName: "music.note").foregroundColor(.dlPrimary)
                 }
-                .task(id: "\(url)#\(cache.generation)") { loaded = await cache.load(url) }
+                .task(id: "\(url)#\(cache.generation)") {
+                    let target = url
+                    if let image = await cache.load(target) { loaded = (target, image) }
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
