@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var router: NavigationRouter
     @ObservedObject private var social = SocialStore.shared
+    @State private var showFriendList = false
     @Environment(\.openURL) private var openURL
     @State private var showReminderSheet = false
     @State private var reminderSummary = ""
@@ -44,6 +45,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showReminderSheet, onDismiss: updateReminderSummary) { ReminderSheet() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
+            .sheet(isPresented: $showFriendList) { FriendListSheet() }
             .sheet(isPresented: $showBirthday) { BirthdaySheet() }
             .manageSubscriptionsSheet(isPresented: $showManageSubscription)
             .onAppear(perform: updateReminderSummary)
@@ -385,6 +387,10 @@ struct SettingsView: View {
                 if social.isOfficialOwner {
                     officialOwnerRow
                 }
+                row(icon: "person.2", title: S("フレンド一覧", "Friend List", "친구 목록"),
+                    detail: S("\(social.allFriends.count)人", "\(social.allFriends.count)", "\(social.allFriends.count)명")) {
+                    showFriendList = true
+                }
                 row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
                     detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)", "\(social.blockedUsers.count)명")) {
                     showBlocked = true
@@ -442,9 +448,9 @@ struct SettingsView: View {
                     .foregroundColor(.dlText)
             }
             .tint(.dlPrimary)
-            Text(verbatim: S("共有した曲とメモが、フォローした人全員に見えます。フォローはコード「\(SocialStore.officialCode)」で。",
-                             "Your shared songs and notes are visible to all followers. Follow code: \(SocialStore.officialCode)",
-                             "공유한 곡과 메모가 모든 팔로워에게 보입니다. 팔로우 코드: \(SocialStore.officialCode)"))
+            Text(verbatim: S("共有した曲とメモが、開発者としてフレンドになった人全員に見えます。フレンドになるコードは「\(SocialStore.officialCode)」です。",
+                             "Your shared songs and notes are visible to everyone who becomes friends with you as the developer. Their code: \(SocialStore.officialCode)",
+                             "공유한 곡과 메모가 개발자로서 친구가 된 모든 사람에게 보입니다. 친구 코드: \(SocialStore.officialCode)"))
                 .font(.caption)
                 .foregroundColor(.dlTextSub)
         }
@@ -671,5 +677,29 @@ private struct ReminderSheet: View {
             ReminderStore.shared.cancelAll()
         }
         dismiss()
+    }
+}
+
+/// 設定から開くフレンドの一覧。フレンドをやめる・ブロックするもここから
+private struct FriendListSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var social = SocialStore.shared
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                FriendListCard().padding(20)
+            }
+            .background(DlBackground().ignoresSafeArea())
+            .navigationTitle(Text(verbatim: S("フレンド一覧", "Friend List", "친구 목록")))
+            .navigationBarTitleDisplayMode(.inline)
+            .appNavBarBackground()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(S("閉じる", "Close")) { dismiss() }.foregroundColor(.dlPrimary)
+                }
+            }
+            .refreshable { await social.refresh() }
+        }
     }
 }

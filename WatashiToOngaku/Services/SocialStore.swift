@@ -57,11 +57,11 @@ final class SocialStore: ObservableObject {
     @Published private(set) var likers: [String: [Friend]] = [:]
     /// 公式アカウント（公開されていれば）
     @Published private(set) var official: Friend?
-    /// 公式アカウントをフォローしているか
+    /// 公式アカウント（開発者）とフレンドになっているか。中では一方通行のフォローとして扱う
     @Published private(set) var followsOfficial = false
     /// この端末が公式アカウントの持ち主で、自分の曲を公式として公開しているか
     @Published private(set) var publishesOfficial = false
-    /// 持ち主：公式アカウントをフォローしている人（投稿を読む鍵を届けてくれた人）
+    /// 持ち主：公式アカウントとフレンドになった人（投稿を読む鍵を届けてくれた人）
     @Published private(set) var followers: [Friend] = []
     @Published var lastError: String?
 
@@ -150,13 +150,15 @@ final class SocialStore: ObservableObject {
 
     // MARK: - 公式アカウント
     //
-    // 開発者の毎日の一曲を、フォローした人のタイムラインに流す。フレンドと違って一方通行で、承認も人数の上限もない。
+    // 開発者と誰でもフレンドになれる。画面ではふつうのフレンドと同じに見せるが、中では一方通行のフォローで、
+    // 承認も人数の上限もない（ふつうのフレンドの申請の枠は 64 しかなく、持ち主が全員の投稿を読むことになるため）。
     // - プロフィールはレコード "official-profile"、投稿は "o-<日付>"（誰でも読める。中身は公開してよいものだけ）
     // - 公式として書けるのは、開発用ビルドで「公式アカウントの持ち主」にした端末（iCloud の Key-Value に控える）だけ
     // - フォローする側は、投稿を置いた iCloud 利用者がプロフィールを置いた人と同じかを確かめる
     // - フォローすると、公式の「郵便受け」（"of-<番号>"）に自分のコードと鍵（公式の公開鍵でしか開けない）を置く。
     //   持ち主はこれでフォロワーの投稿を読み、公式としていいねできる（"l-<投稿>-OFFICIAL"）
-    // - 公式の投稿へのいいねは "ol-<日付>-<番号>" の空いている枠に置く（持ち主はフォロワーを知らないので、枠を順に読む）
+    // - 公式の投稿へのいいねは OfficialLike（"ol-<日付>-<ランダム>"）に置き、持ち主は日付で検索する。
+    //   索引を付けるのはこの型の dayKey だけ（公式の投稿はもともと公開なので、他人の投稿を探し出せることにはならない）
 
     /// フォロー用のコード。ふつうのフレンドコードには O と I を使わないので、重ならない
     static let officialCode = "OFFICIAL"
@@ -164,6 +166,14 @@ final class SocialStore: ObservableObject {
 
     private static func officialPostID(_ dayKey: String) -> CKRecord.ID {
         CKRecord.ID(recordName: "o-\(dayKey)")
+    }
+
+    /// 画面に出すフレンド：ふつうのフレンドと、フレンドになった公式アカウント（開発者）。
+    /// 公式の持ち主とふつうのフレンドでもあるなら、公式のほうは重ねて出さない
+    var allFriends: [Friend] {
+        guard followsOfficial, !isOfficialOwner, let official,
+              !links.contains(where: { $0.creator == officialCreator }) else { return friends }
+        return [official] + friends
     }
 
     /// 公式アカウントの持ち主の端末か（開発用ビルドの設定で決める）
@@ -183,7 +193,7 @@ final class SocialStore: ObservableObject {
         get { value("official_followSlot") as? String }
         set { set(newValue, "official_followSlot") }
     }
-    /// 公式の投稿に付けたいいね：日付 → 置いた枠
+    /// 公式の投稿に付けたいいね：日付 → レコード名
     private var officialLikes: [String: String] {
         get { value("official_likes") as? [String: String] ?? [:] }
         set { set(newValue, "official_likes") }
@@ -661,9 +671,9 @@ final class SocialStore: ObservableObject {
         case .requested: return S("フレンド申請を送りました。相手が承認するとフレンドになります。",
                                   "Request sent. You'll become friends once they accept.")
         case .becameFriends: return S("フレンドになりました！", "You're now friends!")
-        case .followedOfficial: return S("公式アカウントをフォローしました！開発者の毎日の一曲がタイムラインに流れます。あなたが共有した曲も公式アカウントに届きます。",
-                                         "You're following the official account! The developer's daily song will appear in your timeline, and your shared songs will reach the official account.",
-                                         "공식 계정을 팔로우했습니다! 개발자의 매일의 한 곡이 타임라인에 표시되고, 공유한 곡도 공식 계정에 전달됩니다.")
+        case .followedOfficial: return S("開発者とフレンドになりました！開発者の毎日の一曲がタイムラインに流れ、あなたが共有した曲も開発者に届きます。",
+                                         "You're now friends with the developer! Their daily song will appear in your timeline, and your shared songs will reach them.",
+                                         "개발자와 친구가 되었습니다! 개발자의 매일의 한 곡이 타임라인에 표시되고, 공유한 곡도 개발자에게 전달됩니다.")
         }
     }
 
@@ -877,7 +887,8 @@ final class SocialStore: ObservableObject {
         timeline = posts.filter { days.contains($0.dayKey) }.sorted {
             $0.dayKey != $1.dayKey ? $0.dayKey > $1.dayKey : $0.postedAt > $1.postedAt
         }
-        await fetchLikes(for: timeline)
+        // いいねは、画面に出た投稿のカードがそれぞれ読み直す
+        likesGeneration += 1
     }
 
     /// もっと前の投稿を読み込めるか（Plus は1年前まで）
@@ -902,13 +913,36 @@ final class SocialStore: ObservableObject {
         let added = older.filter { !known.contains($0.id) }
         timeline += added
         timelineDays = newDays
-        await fetchLikes(for: added)
     }
 
     // MARK: - いいね
 
     /// いいねは "l-<投稿のレコード名>-<いいねした人のコード>" に置く。
     /// 投稿の鍵を知っているフレンドにしか場所が分からず、投稿した人は自分のフレンドのコードで探す（検索はしない）
+    /// 公式の投稿のいいねを一度に数える上限（超えたら「99+」）
+    static let officialLikeLimit = 99
+
+    /// タイムラインを更新するたびに増える。カードはこれが変わったら自分のいいねを読み直す
+    @Published private(set) var likesGeneration = 0
+    /// いいねが多すぎて数えきれなかった自分の投稿（日付）
+    @Published private(set) var likeOverflow: Set<String> = []
+    private var pendingLikes: [FriendPost] = []
+    private var likesFlush: Task<Void, Never>?
+
+    /// 画面に出た投稿のいいねを読む。少しのあいだに出たカードの分をまとめて読む
+    func requestLikes(for post: FriendPost) {
+        guard state == .ready, !isPreview else { return }
+        pendingLikes.append(post)
+        guard likesFlush == nil else { return }
+        likesFlush = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            let batch = pendingLikes
+            pendingLikes = []
+            likesFlush = nil
+            await fetchLikes(for: batch)
+        }
+    }
+
     private static func likeID(post: String, code: String) -> CKRecord.ID {
         CKRecord.ID(recordName: "l-\(post)-\(code)")
     }
@@ -921,7 +955,7 @@ final class SocialStore: ObservableObject {
 
     /// 投稿にいいねする／取り消す。
     /// フレンドの投稿には自分のコードで、公式の持ち主がフォロワーの投稿に付けるときは公式（OFFICIAL）として付ける。
-    /// 公式の投稿へのいいねは、"ol-<日付>-" の空いている枠に置く
+    /// 公式の投稿へのいいねは、日付で検索できる OfficialLike に置く
     func toggleLike(_ post: FriendPost) async {
         guard state == .ready, !post.friend.isMe else { return }
         let liking = !likedByMe.contains(post.id)
@@ -930,11 +964,13 @@ final class SocialStore: ObservableObject {
         do {
             if post.friend.isOfficial {
                 if liking {
-                    guard let slot = await claimSlot(prefix: "ol-\(post.dayKey)-", type: "Like",
-                                                     fields: ["fromCode": friendCode as NSString, "likedAt": Date() as NSDate]) else {
-                        throw CKError(.serverRejectedRequest)
-                    }
-                    officialLikes[post.dayKey] = slot
+                    let record = CKRecord(recordType: "OfficialLike",
+                                          recordID: CKRecord.ID(recordName: "ol-\(post.dayKey)-\(Self.random(12))"))
+                    record["dayKey"] = post.dayKey
+                    record["fromCode"] = friendCode
+                    record["likedAt"] = Date()
+                    _ = try await save(record)
+                    officialLikes[post.dayKey] = record.recordID.recordName
                 } else if let slot = officialLikes[post.dayKey] {
                     _ = try await publicDB.modifyRecords(saving: [], deleting: [CKRecord.ID(recordName: slot)])
                     officialLikes[post.dayKey] = nil
@@ -981,11 +1017,18 @@ final class SocialStore: ObservableObject {
                 targets[Self.likeID(post: post.id, code: code)] = (post, nil)
             }
         }
-        // 持ち主：自分の投稿（＝公式の投稿）へのフォロワーのいいね
-        let mineDays = posts.filter(\.friend.isMe).map(\.dayKey)
-        let officialSlots = isOfficialOwner && publishesOfficial && !mineDays.isEmpty
-            ? await readSlots(mineDays.map { "ol-\($0)-" }) : [:]
-        let officialLikers = await verifiedSenders(officialSlots.values.flatMap { $0 })
+        // 持ち主：自分の投稿（＝公式の投稿）へのいいねを日付で検索する（多すぎるときは上限まで）
+        var officialLikers: [String: [Friend]] = [:]
+        var overflow = likeOverflow
+        if isOfficialOwner, publishesOfficial {
+            for dayKey in posts.filter(\.friend.isMe).map(\.dayKey) {
+                let query = CKQuery(recordType: "OfficialLike", predicate: NSPredicate(format: "dayKey == %@", dayKey))
+                guard let (results, cursor) = try? await publicDB.records(matching: query, desiredKeys: ["fromCode"],
+                                                                         resultsLimit: Self.officialLikeLimit) else { continue }
+                officialLikers[dayKey] = await verifiedSenders(results.compactMap { try? $0.1.get() }).map(\.friend)
+                if cursor != nil { overflow.insert(dayKey) } else { overflow.remove(dayKey) }
+            }
+        }
         var found: [CKRecord.ID: CKRecord] = [:]
         for chunk in Array(targets.keys).chunked(200) {
             guard let results = try? await publicDB.records(for: chunk, desiredKeys: []) else { return }
@@ -997,11 +1040,10 @@ final class SocialStore: ObservableObject {
             // 公式の投稿へのいいねは、置いた枠を端末に控えてある
             if post.friend.isOfficial, officialLikes[post.dayKey] != nil { liked.insert(post.id) }
         }
-        for item in officialLikers {
-            // "ol-2026-11-02-5" → "2026-11-02"
-            let dayKey = String(item.record.recordID.recordName.dropFirst(3).prefix(10))
-            guard !(likers[dayKey] ?? []).contains(where: { $0.code == item.friend.code }) else { continue }
-            likers[dayKey, default: []].append(item.friend)
+        for (dayKey, friends) in officialLikers {
+            for friend in friends where !(likers[dayKey] ?? []).contains(where: { $0.code == friend.code }) {
+                likers[dayKey, default: []].append(friend)
+            }
         }
         for (id, target) in targets {
             guard let record = found[id] else { continue }
@@ -1014,6 +1056,7 @@ final class SocialStore: ObservableObject {
         }
         self.likedByMe = liked
         self.likers = likers.mapValues { $0.sorted { $0.nickname < $1.nickname } }
+        likeOverflow = overflow
         // 確かめた投稿は、iCloud の状態に合わせて控えを直す（別の端末で取り消したいいねを付け直さないように）
         let checked = Set(posts.filter { !$0.friend.isMe && !$0.friend.isOfficial && !$0.friend.isFollower }.map(\.id))
         let saved = likedPosts.subtracting(checked).union(liked.intersection(checked))
@@ -1162,8 +1205,8 @@ final class SocialStore: ObservableObject {
         for code in outgoingCodes { await sendKey(to: code) }
         // 公式に届けた鍵と、公式の投稿へのいいねも新しいコードに書き換える
         await sendKeyToOfficial()
-        for slot in officialLikes.values {
-            let record = CKRecord(recordType: "Like", recordID: CKRecord.ID(recordName: slot))
+        for name in officialLikes.values {
+            let record = CKRecord(recordType: "OfficialLike", recordID: CKRecord.ID(recordName: name))
             record["fromCode"] = friendCode
             _ = try? await save(record)
         }

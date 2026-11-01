@@ -111,14 +111,14 @@ struct TimelineView: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 6) {
-            if !social.friends.isEmpty {
+            if !social.allFriends.isEmpty {
                 TimelineListBar().padding(.top, 10)
             }
             LazyVStack(spacing: 14) {
                 if posts.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
-                        Text(verbatim: social.friends.isEmpty
+                        Text(verbatim: social.allFriends.isEmpty
                              ? S("フレンドを追加すると、選んだ曲がここに流れます", "Add friends to see their songs here")
                              : selectedList != nil
                              ? S("このタイムラインの投稿はまだありません。長押しで入れるフレンドを編集できます", "No posts in this timeline yet. Long-press its name to edit friends.", "이 타임라인에는 아직 게시물이 없습니다. 이름을 길게 눌러 친구를 편집할 수 있습니다")
@@ -126,7 +126,7 @@ struct TimelineView: View {
                             .font(.subheadline)
                             .foregroundColor(.dlTextSub)
                             .multilineTextAlignment(.center)
-                        if social.friends.isEmpty {
+                        if social.allFriends.isEmpty {
                             Button(S("フレンドを追加", "Add Friends")) { showFriends = true }
                                 .buttonStyle(PrimaryButtonStyle())
                                 .padding(.horizontal, 40)
@@ -292,7 +292,7 @@ private struct PostCard: View {
                             .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                         if post.friend.isOfficial { OfficialBadge() }
                         if post.friend.isFollower {
-                            Text(verbatim: S("フォロワー", "Follower", "팔로워"))
+                            Text(verbatim: S("開発者のフレンド", "Developer's friend", "개발자의 친구"))
                                 .font(.caption2.weight(.semibold))
                                 .foregroundColor(.dlPrimary)
                                 .padding(.horizontal, 6)
@@ -315,7 +315,7 @@ private struct PostCard: View {
                         Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
                     }
                     if post.friend.isOfficial {
-                        Button(S("フォローをやめる", "Unfollow", "팔로우 취소"), systemImage: "person.badge.minus") {
+                        Button(S("フレンドをやめる", "Remove Friend", "친구 끊기"), systemImage: "person.badge.minus") {
                             Task { await social.setFollowsOfficial(false) }
                         }
                     } else if !post.friend.isMe {
@@ -354,6 +354,8 @@ private struct PostCard: View {
             }
         }
         .dlCard()
+        // 画面に出たら、この投稿のいいねを読む（タイムラインを更新したら読み直す）
+        .task(id: "\(post.id)#\(social.likesGeneration)") { social.requestLikes(for: post) }
         .overlay {
             if isPlaying {
                 RoundedRectangle(cornerRadius: 20).stroke(LinearGradient.dlPrimary, lineWidth: 2.5)
@@ -380,10 +382,10 @@ private struct PostCard: View {
                         .font(.system(size: Self.heartSize))
                         .foregroundColor(.pink)
                         .frame(width: Self.heartBox, height: Self.heartBox)
-                    Text(verbatim: "\(likers.count)").font(.caption2.weight(.semibold)).foregroundColor(.dlTextSub)
+                    Text(verbatim: likeCountText).font(.caption2.weight(.semibold)).foregroundColor(.dlTextSub)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(S("いいね \(likers.count)件", "\(likers.count) likes", "좋아요 \(likers.count)개"))
+                .accessibilityLabel(S("いいね \(likeCountText)件", "\(likeCountText) likes", "좋아요 \(likeCountText)개"))
             }
         } else {
             let liked = social.likedByMe.contains(post.id)
@@ -404,12 +406,19 @@ private struct PostCard: View {
         }
     }
 
-    /// 「Mioさん、Kenさんがいいねしました」
+    /// 数えきれないほど多ければ「99+」
+    private var likeCountText: String {
+        social.likeOverflow.contains(post.dayKey) ? "\(likers.count)+" : "\(likers.count)"
+    }
+
+    /// 「Mioさん、Kenさんがいいねしました」。4人以上なら「Mioさん、Kenさん、Yuiさんほか5人」
     private var likersText: String {
-        let names = likers.map(\.nickname)
-        return S("\(names.map { $0 + "さん" }.joined(separator: "、"))がいいねしました",
-                 "Liked by \(names.joined(separator: ", "))",
-                 "\(names.map { $0 + "님" }.joined(separator: ", "))이 좋아요를 눌렀습니다")
+        let shown = likers.prefix(3).map(\.nickname)
+        let rest = likers.count - shown.count
+        let more = social.likeOverflow.contains(post.dayKey) ? "+" : ""
+        return S("\(shown.map { $0 + "さん" }.joined(separator: "、"))\(rest > 0 ? "ほか\(rest)\(more)人" : "")がいいねしました",
+                 "Liked by \(shown.joined(separator: ", "))\(rest > 0 ? " and \(rest)\(more) others" : "")",
+                 "\(shown.map { $0 + "님" }.joined(separator: ", "))\(rest > 0 ? " 외 \(rest)\(more)명" : "")이 좋아요를 눌렀습니다")
     }
 
     private var dayText: String {

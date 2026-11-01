@@ -12,7 +12,7 @@ struct TimelineListBar: View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    chip(S("みんな", "Everyone", "모두"), count: social.friends.count, id: TimelineListStore.allID)
+                    chip(S("みんな", "Everyone", "모두"), count: social.allFriends.count, id: TimelineListStore.allID)
                     Group {
                         ForEach(store.available(isPlus: plus.isPlus)) { list in
                             chip(list.name, count: members(of: list).count, id: list.id)
@@ -47,7 +47,7 @@ struct TimelineListBar: View {
             if let list = store.current(isPlus: plus.isPlus) {
                 memberRow(members(of: list)) { editing = list }
             } else {
-                memberRow(social.friends, edit: nil)
+                memberRow(social.allFriends, edit: nil)
             }
         }
         .sheet(item: $editing) { TimelineListEditor(list: $0) }
@@ -56,7 +56,7 @@ struct TimelineListBar: View {
 
     /// タイムラインに入っているフレンド（フレンドをやめた人は数えない）
     private func members(of list: TimelineList) -> [Friend] {
-        social.friends.filter { list.members.contains($0.code) }
+        social.allFriends.filter { list.members.contains($0.code) }
     }
 
     private func memberRow(_ members: [Friend], edit: (() -> Void)?) -> some View {
@@ -131,11 +131,11 @@ struct TimelineListEditor: View {
                     TextField(S("名前（例：大学の友達）", "Name (e.g. College friends)", "이름（예: 대학 친구）"), text: $list.name)
                 }
                 Section {
-                    if social.friends.isEmpty {
+                    if social.allFriends.isEmpty {
                         Text(S("フレンドを追加すると、ここで選べます", "Add friends to choose them here", "친구를 추가하면 여기서 고를 수 있습니다"))
                             .foregroundColor(.dlTextSub)
                     }
-                    ForEach(social.friends) { friend in
+                    ForEach(social.allFriends) { friend in
                         Button {
                             if let index = list.members.firstIndex(of: friend.code) {
                                 list.members.remove(at: index)
