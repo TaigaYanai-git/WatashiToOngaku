@@ -85,7 +85,7 @@ struct AvatarView: View {
         let _ = store.revision
         Group {
             if isDeveloper {
-                DeveloperAvatar(size: size)
+                DeveloperAvatar()
             } else if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
@@ -105,61 +105,10 @@ extension AvatarView {
     }
 }
 
-/// 開発者のアイコン：アプリアイコンと同じレコードを、ブラックとホワイトを除くテーマカラーの7枚、輪に重ねて並べる。
-/// 大きさは黄金比 φ で決める：円の半径を r として、盤の半径も、並べる輪の半径も r/φ²
+/// 開発者のアイコン：標準（ブラック）のアプリアイコンをそのまま使う
 private struct DeveloperAvatar: View {
-    let size: CGFloat
-    private static let phi: CGFloat = (1 + sqrt(5)) / 2
-    /// ローズ〜ラベンダー
-    private static let colors = ThemeStore.accents.dropFirst(2).map(\.primary)
-
     var body: some View {
-        let unit = size / 2 / (Self.phi * Self.phi)
-        ZStack {
-            // 初期アイコンと同じブラックの背景
-            LinearGradient(colors: [ThemeStore.accents[0].primary, ThemeStore.accents[0].primaryEnd],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            ForEach(Self.colors.indices, id: \.self) { index in
-                // いちばん上から時計回りに並べる
-                let angle = Double(index) / Double(Self.colors.count) * 2 * .pi - .pi / 2
-                RecordDisc(color: Self.colors[index])
-                    .frame(width: unit * 2, height: unit * 2)
-                    .shadow(color: .black.opacity(0.25), radius: size * 0.015)
-                    .offset(x: unit * cos(angle), y: unit * sin(angle))
-            }
-        }
-    }
-}
-
-/// アプリアイコンのレコード1枚（scripts/make_icons.py と同じく、半径 360 の盤を基準にした溝・光・ラベル）
-private struct RecordDisc: View {
-    let color: Color
-
-    var body: some View {
-        Canvas { context, size in
-            let radius = size.width / 2
-            let k = radius / 360
-            let center = CGPoint(x: radius, y: radius)
-            func circle(_ r: CGFloat) -> Path {
-                Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
-            }
-            context.fill(circle(radius), with: .color(color))
-            for groove in stride(from: 330.0, to: 153, by: -22) {
-                context.stroke(circle(groove * k), with: .color(.white.opacity(0.07)), lineWidth: 3 * k)
-            }
-            // 左上と右下に光の筋
-            for flip in [0.0, 180.0] {
-                for (r, start, end) in [(280.0, -126.0, -166.0), (230.0, -123.0, -149.0)] {
-                    var arc = Path()
-                    arc.addArc(center: center, radius: r * k, startAngle: .degrees(start + flip),
-                               endAngle: .degrees(end + flip), clockwise: true)
-                    context.stroke(arc, with: .color(.white.opacity(0.35)), style: StrokeStyle(lineWidth: 18 * k, lineCap: .round))
-                }
-            }
-            var label = circle(118 * k)
-            label.addPath(circle(18 * k))
-            context.fill(label, with: .color(.white), style: FillStyle(eoFill: true))
-        }
+        Image("IconPreview-AppIcon").resizable().scaledToFill()
     }
 }
 
