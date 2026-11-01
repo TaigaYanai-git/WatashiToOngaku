@@ -291,6 +291,14 @@ private struct PostCard: View {
                         Text(verbatim: post.friend.isMe ? S("\(post.friend.nickname)（あなた）", "\(post.friend.nickname) (you)", "\(post.friend.nickname) (나)") : post.friend.nickname)
                             .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                         if post.friend.isOfficial { OfficialBadge() }
+                        if post.friend.isFollower {
+                            Text(verbatim: S("フォロワー", "Follower", "팔로워"))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.dlPrimary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.dlPrimaryBg))
+                        }
                     }
                     Text(verbatim: dayText).font(.caption).foregroundColor(.dlTextSub)
                 }
@@ -356,9 +364,7 @@ private struct PostCard: View {
     /// フレンドの投稿にはいいねのボタン、自分の投稿にはいいねの数
     @ViewBuilder
     private var likeButton: some View {
-        if post.friend.isOfficial {
-            EmptyView()
-        } else if post.friend.isMe {
+        if post.friend.isMe {
             if !likers.isEmpty {
                 VStack(spacing: 2) {
                     Image(systemName: "heart.fill").font(.title3).foregroundColor(.pink)

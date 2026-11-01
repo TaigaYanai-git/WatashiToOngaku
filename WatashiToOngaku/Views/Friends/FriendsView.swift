@@ -236,8 +236,11 @@ struct OfficialCard: View {
                     Text(official.nickname).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
                     OfficialBadge()
                 }
-                Text(verbatim: S("開発者の毎日の一曲が流れます", "The developer's daily song", "개발자의 매일의 한 곡"))
+                Text(verbatim: S("開発者の毎日の一曲が流れます。フォローすると、あなたが共有した曲も公式アカウントに届き、いいねが付くことがあります",
+                                 "See the developer's daily song. Following also shares your songs with the official account, which may like them",
+                                 "개발자의 매일의 한 곡이 흐릅니다. 팔로우하면 공유한 곡이 공식 계정에도 전달되며, 좋아요를 받을 수 있습니다"))
                     .font(.caption).foregroundColor(.dlTextSub)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
             let follows = social.followsOfficial
