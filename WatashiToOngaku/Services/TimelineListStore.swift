@@ -1,6 +1,6 @@
 import Foundation
 
-/// フレンドを分けて見るタイムライン（無料で1つ、Plus なら5つまで）。「みんな」のほかに、入れるフレンドを選んだタイムラインを作れる。
+/// フレンドを分けて見るタイムライン（無料で1つ、Plus なら10個まで）。「みんな」のほかに、入れるフレンドを選んだタイムラインを作れる。
 /// 投稿の取り出し方は変えず、端末内で絞り込むだけなので、iCloud の読み書きは増えない
 struct TimelineList: Codable, Identifiable, Hashable {
     var id: String = UUID().uuidString
@@ -14,7 +14,7 @@ final class TimelineListStore: ObservableObject {
     static let shared = TimelineListStore()
 
     /// 「みんな」のほかに作れるタイムラインの数
-    static let maxCustomCount = 5
+    static let maxCustomCount = 10
     /// Plus でなくても作れる数
     static let freeCustomCount = 1
     /// 「みんな」のタイムライン（選んでいないときもこれ）

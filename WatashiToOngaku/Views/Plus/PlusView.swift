@@ -24,7 +24,7 @@ struct PlusView: View {
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 14) {
-                        benefit("rectangle.stack", S("タイムラインを5つまで", "Up to 5 timelines", "타임라인 최대 5개"),
+                        benefit("rectangle.stack", S("タイムラインを10個まで", "Up to 10 timelines", "타임라인 최대 10개"),
                                 S("「大学」「家族」のように、入れるフレンドを選んだタイムラインを作って切り替えられます。無料では1つまでです",
                                   "Make timelines with the friends you choose, like \"College\" or \"Family\", and switch between them. Free users can make one",
                                   "'대학', '가족'처럼 친구를 골라 타임라인을 만들고 전환할 수 있습니다. 무료로는 1개까지입니다"))
