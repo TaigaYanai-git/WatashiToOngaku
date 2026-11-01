@@ -11,6 +11,7 @@ struct FriendsView: View {
     @State private var showMyQR = false
     @State private var message: String?
     @State private var declining: PendingFriend?
+    @State private var confirmingOfficial = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +55,7 @@ struct FriendsView: View {
                 Text(verbatim: S("相手には知らせません。ブロックすると、この人からの申請はもう届きません。",
                                  "They won't be notified. Blocking stops further requests from them."))
             }
+            .officialFriendConfirmation(isPresented: $confirmingOfficial) { message = $0 }
             .refreshable { await social.refresh() }
             .task { await social.refresh() }
         }
@@ -182,7 +184,11 @@ struct FriendsView: View {
             return
         }
         codeInput = ""
-        message = SocialStore.message(for: result)
+        if result == .confirmOfficial {
+            confirmingOfficial = true
+        } else {
+            message = SocialStore.message(for: result)
+        }
     }
 }
 
@@ -190,7 +196,8 @@ struct FriendsView: View {
 struct OfficialCard: View {
     let official: Friend
     @ObservedObject private var social = SocialStore.shared
-    @State private var working = false
+    @State private var confirming = false
+    @State private var message: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -208,11 +215,7 @@ struct OfficialCard: View {
             }
             Spacer(minLength: 0)
             Button {
-                working = true
-                Task {
-                    await social.setFollowsOfficial(true)
-                    working = false
-                }
+                confirming = true
             } label: {
                 Text(verbatim: S("フレンドになる", "Add Friend", "친구 되기"))
                     .font(.subheadline.weight(.semibold))
@@ -221,9 +224,26 @@ struct OfficialCard: View {
                     .padding(.vertical, 7)
                     .background(Capsule().fill(LinearGradient.dlPrimary))
             }
-            .disabled(working)
         }
         .dlCard()
+        .officialFriendConfirmation(isPresented: $confirming) { message = $0 }
+        .alert(Text(verbatim: message ?? ""), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") {}
+        }
+    }
+}
+
+extension View {
+    /// 開発者とフレンドになる前の確認。「フレンドになる」を選んだら befriendOfficial を呼び、結果の文を渡す
+    func officialFriendConfirmation(isPresented: Binding<Bool>, done: @escaping (String) -> Void) -> some View {
+        alert(Text(verbatim: SocialStore.officialConfirmTitle), isPresented: isPresented) {
+            Button(S("キャンセル", "Cancel", "취소"), role: .cancel) {}
+            Button(S("フレンドになる", "Add Friend", "친구 되기")) {
+                Task { done(SocialStore.message(for: await SocialStore.shared.befriendOfficial())) }
+            }
+        } message: {
+            Text(verbatim: SocialStore.officialConfirmMessage)
+        }
     }
 }
 

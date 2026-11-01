@@ -650,7 +650,8 @@ final class SocialStore: ObservableObject {
 
     // MARK: - フレンドの追加（申請と承認）
 
-    enum AddResult { case requested, becameFriends, followedOfficial }
+    /// confirmOfficial：開発者とフレンドになる前に、曲が開発者にも見えることを確かめてもらう（befriendOfficial で進める）
+    enum AddResult { case requested, becameFriends, followedOfficial, confirmOfficial }
 
     /// フレンドコードで申請する。相手が承認するとフレンドになる（相手からも申請が届いていれば、すぐにフレンドになる）
     func addFriend(code raw: String) async -> AddResult? {
@@ -668,8 +669,7 @@ final class SocialStore: ObservableObject {
                 lastError = S("公式アカウントはまだ準備中です", "The official account isn't available yet", "공식 계정은 아직 준비 중입니다")
                 return nil
             }
-            await setFollowsOfficial(true)
-            return .followedOfficial
+            return .confirmOfficial
         }
         guard code.count == 8 else { lastError = S("フレンドコードは8文字です", "Friend codes are 8 characters"); return nil }
         guard code != friendCode else { lastError = S("自分のコードです", "That's your own code"); return nil }
@@ -684,11 +684,27 @@ final class SocialStore: ObservableObject {
         return .requested
     }
 
+    /// 確かめてもらったあと、開発者とフレンドになる
+    func befriendOfficial() async -> AddResult {
+        await setFollowsOfficial(true)
+        return .followedOfficial
+    }
+
+    static var officialConfirmTitle: String {
+        S("開発者とフレンドになりますか？", "Be friends with the developer?", "개발자와 친구가 될까요?")
+    }
+    static var officialConfirmMessage: String {
+        S("開発者の毎日の一曲がタイムラインに流れます。あなたが共有した曲とメモも開発者に見えるようになり、いいねが付くことがあります。フレンドをやめると見えなくなります。",
+          "The developer's daily song will appear in your timeline. Your shared songs and notes will also be visible to the developer, who may like them. Remove the friend anytime to stop sharing.",
+          "개발자의 매일의 한 곡이 타임라인에 표시됩니다. 공유한 곡과 메모도 개발자에게 보이며, 좋아요를 받을 수 있습니다. 친구를 끊으면 더 이상 보이지 않습니다.")
+    }
+
     static func message(for result: AddResult) -> String {
         switch result {
         case .requested: return S("フレンド申請を送りました。相手が承認するとフレンドになります。",
                                   "Request sent. You'll become friends once they accept.")
         case .becameFriends: return S("フレンドになりました！", "You're now friends!")
+        case .confirmOfficial: return Self.officialConfirmMessage
         case .followedOfficial: return S("開発者とフレンドになりました！開発者の毎日の一曲がタイムラインに流れ、あなたが共有した曲も開発者に届きます。",
                                          "You're now friends with the developer! Their daily song will appear in your timeline, and your shared songs will reach them.",
                                          "개발자와 친구가 되었습니다! 개발자의 매일의 한 곡이 타임라인에 표시되고, 공유한 곡도 개발자에게 전달됩니다.")

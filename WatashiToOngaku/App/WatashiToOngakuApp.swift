@@ -21,6 +21,8 @@ enum AppContainer {
 final class PendingInvite: ObservableObject {
     static let shared = PendingInvite()
     @Published var result: String?
+    /// 招待リンクが開発者（OFFICIAL）のもので、フレンドになる前の確認を出す
+    @Published var confirmOfficial = false
 }
 
 @main
@@ -100,7 +102,12 @@ private struct AppRootView: View {
                     invite.result = S("フレンドを追加するには、先にタイムラインでニックネームを決めてください", "Set your nickname in Timeline first, then open the invite again")
                     return
                 }
-                invite.result = await social.addFriend(url: url).map(SocialStore.message(for:))
+                let result = await social.addFriend(url: url)
+                if result == .confirmOfficial {
+                    invite.confirmOfficial = true
+                    return
+                }
+                invite.result = result.map(SocialStore.message(for:))
                     ?? (social.lastError ?? S("申請できませんでした", "Couldn't send the request"))
             }
         }
@@ -108,6 +115,7 @@ private struct AppRootView: View {
                isPresented: Binding(get: { invite.result != nil }, set: { if !$0 { invite.result = nil } })) {
             Button("OK") { router.selectedTab = .timeline }
         }
+        .officialFriendConfirmation(isPresented: $invite.confirmOfficial) { invite.result = $0 }
         .onAppear {
             if let tab = UserDefaults.standard.string(forKey: "initialTab") {
                 router.selectedTab = ["timeline": .timeline, "calendar": .calendar, "review": .review, "settings": .settings][tab] ?? .today
