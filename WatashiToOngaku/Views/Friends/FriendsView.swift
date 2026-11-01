@@ -349,7 +349,7 @@ struct FriendListCard: View {
                 HStack(spacing: 12) {
                     AvatarView(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname)
                     Text(friend.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
-                    if friend.isOfficial { OfficialBadge() }
+                    if friend.isOfficial || friend.isDeveloper { OfficialBadge() }
                     Spacer()
                     Button { removing = friend } label: {
                         Image(systemName: "ellipsis").foregroundColor(.dlTextSub).frame(width: 30, height: 30)

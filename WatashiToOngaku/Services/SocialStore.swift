@@ -646,6 +646,12 @@ final class SocialStore: ObservableObject {
         guard state == .ready else { lastError = S("先にニックネームを決めてください", "Set your nickname first"); return nil }
         if code == Self.officialCode {
             await loadOfficial()
+            // 開発者とはもうフレンド（公式としても、ふつうのフレンドとしても）
+            guard !followsOfficial, !isOfficialOwner,
+                  !links.contains(where: { $0.creator == officialCreator }) else {
+                lastError = S("開発者とはすでにフレンドです", "You're already friends with the developer", "개발자와 이미 친구입니다")
+                return nil
+            }
             guard official != nil else {
                 lastError = S("公式アカウントはまだ準備中です", "The official account isn't available yet", "공식 계정은 아직 준비 중입니다")
                 return nil
@@ -873,6 +879,14 @@ final class SocialStore: ObservableObject {
         postCache = [:]
         await syncOfficial()
         await loadOfficial()
+        // 開発者とふつうのフレンドでもあれば、その人にも「開発者」の印を付ける
+        if let creator = officialCreator {
+            friends = friends.map { friend in
+                var friend = friend
+                friend.isDeveloper = links.first { $0.code == friend.code }?.creator == creator
+                return friend
+            }
+        }
         if followsOfficial, officialFollowSlot == nil { await sendKeyToOfficial() }
         await loadFollowers()
 
@@ -1069,7 +1083,8 @@ final class SocialStore: ObservableObject {
     private var postCache: [String: FriendPost?] = [:]
 
     private var me: Friend {
-        Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true)
+        Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true,
+               isDeveloper: isOfficialOwner && publishesOfficial)
     }
 
     /// 期間内の、フレンドと自分の投稿。
@@ -1313,6 +1328,8 @@ struct Friend: Identifiable, Hashable {
     var avatarVersion = 0
     var isMe = false
     var isOfficial = false
+    /// 開発者本人（公式アカウントの持ち主）。公式アカウントと同じく「開発者」の印を付ける
+    var isDeveloper = false
     /// 公式アカウントのフォロワー（持ち主の端末にだけ出る）
     var isFollower = false
     var id: String { code }

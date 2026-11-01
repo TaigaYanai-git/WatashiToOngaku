@@ -298,7 +298,7 @@ private struct PostCard: View {
                                 Text(verbatim: S("（あなた）", "(you)", "(나)"))
                                     .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                             }
-                            if post.friend.isOfficial { OfficialBadge() }
+                            if post.friend.isOfficial || post.friend.isDeveloper { OfficialBadge() }
                             if post.friend.isFollower {
                                 Text(verbatim: S("開発者のフレンド", "Developer's friend", "개발자의 친구"))
                                     .font(.caption2.weight(.semibold))
