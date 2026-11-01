@@ -225,13 +225,25 @@ final class SocialStore: ObservableObject {
             for (key, value) in fields { record[key] = value }
             if (try? await save(record)) != nil { return }
         }
-        officialFollowSlot = await claimSlot(prefix: "of-", type: "FriendRequest", fields: fields)
+        let slot = await claimSlot(prefix: "of-", type: "FriendRequest", fields: fields)
+        // 置いているあいだにフレンドをやめていたら、置いた鍵をすぐ消す
+        guard followsOfficial else {
+            if let slot { _ = try? await publicDB.modifyRecords(saving: [], deleting: [CKRecord.ID(recordName: slot)]) }
+            return
+        }
+        officialFollowSlot = slot
     }
 
     /// フォローをやめる・フレンド機能をやめる：公式に届けた鍵と、公式の投稿へのいいねを消す
     private func withdrawFromOfficial() async {
         let ids = ([officialFollowSlot].compactMap { $0 } + officialLikes.values).map { CKRecord.ID(recordName: $0) }
-        guard !ids.isEmpty, (try? await publicDB.modifyRecords(saving: [], deleting: ids)) != nil else { return }
+        guard !ids.isEmpty, let (_, deleted) = try? await publicDB.modifyRecords(saving: [], deleting: ids) else { return }
+        // 1件でも消せなかったら（もう無いものは消えたとみなす）、控えを残して次の機会にやり直す
+        let failed = ids.contains { id in
+            guard case .failure(let error)? = deleted[id] else { return false }
+            return (error as? CKError)?.code != .unknownItem
+        }
+        guard !failed else { return }
         officialFollowSlot = nil
         officialLikes = [:]
         likedByMe = likedByMe.filter { !$0.hasPrefix("o-") }
@@ -889,6 +901,8 @@ final class SocialStore: ObservableObject {
             }
         }
         if followsOfficial, officialFollowSlot == nil { await sendKeyToOfficial() }
+        // 前にフレンドをやめたときに消せなかった鍵やいいねが残っていれば、もう一度消す
+        if !followsOfficial, officialFollowSlot != nil || !officialLikes.isEmpty { await withdrawFromOfficial() }
         await loadFollowers()
 
         // 各フレンドの最近の投稿を、レコード名を指定して取り出す（検索はしない）
@@ -1185,6 +1199,12 @@ final class SocialStore: ObservableObject {
     /// フレンドをやめる。自分の鍵とコードを作り直して、相手が読めないようにする
     func remove(_ friend: Friend, block: Bool) async {
         if block { self.block(friend.code, nickname: friend.nickname) }
+        // 開発者のフレンド（持ち主の端末）は鍵を交わしていないので、ブロックして出さないだけにする
+        if friend.isFollower {
+            followers.removeAll { $0.code == friend.code }
+            timeline.removeAll { $0.friend.code == friend.code }
+            return
+        }
         links.removeAll { $0.code == friend.code }
         friends.removeAll { $0.code == friend.code }
         timeline.removeAll { $0.friend.code == friend.code }
