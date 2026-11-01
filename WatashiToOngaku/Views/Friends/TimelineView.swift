@@ -398,21 +398,9 @@ private struct PostCard: View {
                 .accessibilityLabel(S("いいね \(likeCountText)件", "\(likeCountText) likes", "좋아요 \(likeCountText)개"))
             }
         } else {
-            let liked = social.likedByMe.contains(post.id)
-            Button {
+            LikeButton(liked: social.likedByMe.contains(post.id), size: Self.heartSize, box: Self.heartBox) {
                 Task { await social.toggleLike(post) }
-            } label: {
-                Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.system(size: Self.heartSize))
-                    .foregroundColor(liked ? .pink : .dlTextSub)
-                    .scaleEffect(liked ? 1.15 : 1)
-                    .frame(width: Self.heartBox, height: Self.heartBox)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: liked)
-            .sensoryFeedback(.impact(weight: .light), trigger: liked) { _, new in new }
-            .accessibilityLabel(liked ? S("いいねを取り消す", "Unlike", "좋아요 취소") : S("いいね", "Like", "좋아요"))
         }
     }
 
@@ -495,5 +483,99 @@ struct SocialSetupView: View {
             }
             .padding(20)
         }
+    }
+}
+
+/// いいねのハート。押すと一度縮んでから弾むように大きくなり、まわりに粒がはじける。
+/// 押したとき・取り消したときで手ごたえ（振動）を変える
+private struct LikeButton: View {
+    let liked: Bool
+    let size: CGFloat
+    let box: CGFloat
+    let action: () -> Void
+    /// いいねするたびに増やして、弾む動きと粒をもう一度動かす
+    @State private var pops = 0
+
+    var body: some View {
+        Button {
+            if !liked { pops += 1 }
+            action()
+        } label: {
+            Image(systemName: liked ? "heart.fill" : "heart")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(liked ? Color.pink : Color.dlTextSub)
+                .contentTransition(.symbolEffect(.replace))
+                .keyframeAnimator(initialValue: 1.0, trigger: pops) { view, scale in
+                    view.scaleEffect(scale)
+                } keyframes: { _ in
+                    // 縮む → 大きく弾む → 少し戻って落ち着く
+                    CubicKeyframe(0.7, duration: 0.08)
+                    SpringKeyframe(1.35, duration: 0.18, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.35, spring: .bouncy(extraBounce: 0.2))
+                }
+                .background { LikeBurst(trigger: pops, radius: box * 0.62) }
+                .frame(width: box, height: box)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleStyle())
+        .sensoryFeedback(trigger: liked) { _, new in
+            new ? .impact(weight: .medium, intensity: 0.9) : .impact(weight: .light, intensity: 0.5)
+        }
+        .accessibilityLabel(liked ? S("いいねを取り消す", "Unlike", "좋아요 취소") : S("いいね", "Like", "좋아요"))
+    }
+}
+
+/// いいねしたときに、ハートのまわりへ広がって消える小さな粒
+private struct LikeBurst: View {
+    let trigger: Int
+    let radius: CGFloat
+    private static let count = 7
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<Self.count, id: \.self) { index in
+                let angle = Double(index) / Double(Self.count) * 2 * .pi - .pi / 2
+                Circle()
+                    .fill(index.isMultiple(of: 2) ? Color.pink : Color.pink.opacity(0.6))
+                    .frame(width: 4, height: 4)
+                    .keyframeAnimator(initialValue: BurstFrame(), trigger: trigger) { view, frame in
+                        view
+                            .scaleEffect(frame.scale)
+                            .opacity(frame.opacity)
+                            .offset(x: cos(angle) * radius * frame.distance, y: sin(angle) * radius * frame.distance)
+                    } keyframes: { _ in
+                        KeyframeTrack(\.distance) {
+                            LinearKeyframe(0.35, duration: 0.06)
+                            CubicKeyframe(1.0, duration: 0.32)
+                        }
+                        KeyframeTrack(\.opacity) {
+                            LinearKeyframe(1, duration: 0.06)
+                            LinearKeyframe(1, duration: 0.14)
+                            CubicKeyframe(0, duration: 0.2)
+                        }
+                        KeyframeTrack(\.scale) {
+                            LinearKeyframe(1, duration: 0.2)
+                            CubicKeyframe(0.3, duration: 0.2)
+                        }
+                    }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct BurstFrame {
+    var distance: CGFloat = 0.35
+    /// 押す前は見えない
+    var opacity: Double = 0
+    var scale: CGFloat = 1
+}
+
+/// 指を置いたあいだ少し沈む
+private struct PressScaleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
