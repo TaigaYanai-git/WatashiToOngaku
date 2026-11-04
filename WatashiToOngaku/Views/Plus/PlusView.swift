@@ -44,6 +44,14 @@ struct PlusView: View {
                                 S("タイムラインと今日の一曲に広告が出なくなります", "Removes ads from the timeline and Today", "타임라인과 오늘의 한 곡에 광고가 표시되지 않습니다"))
                     }
                     .dlCard()
+                    // 自動更新サブスクリプションの必須情報として、利用規約（EULA）とプライバシーポリシーへのリンクを本文にも出す
+                    HStack(spacing: 16) {
+                        Link(S("利用規約（EULA）", "Terms of Use (EULA)", "이용약관(EULA)"), destination: Self.termsURL)
+                        Link(S("プライバシーポリシー", "Privacy Policy", "개인정보 처리방침"), destination: Self.privacyURL)
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.dlPrimary)
+                    .padding(.bottom, 8)
                 }
                 .padding(.horizontal, 20)
             }
@@ -51,8 +59,8 @@ struct PlusView: View {
         }
         .compactPlanPicker()
         .subscriptionStoreButtonLabel(.multiline)
-        .subscriptionStorePolicyDestination(url: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!, for: .termsOfService)
-        .subscriptionStorePolicyDestination(url: Bundle.main.urlSetting("PRIVACY_POLICY_URL") ?? URL(string: "https://www.apple.com/legal/privacy/")!, for: .privacyPolicy)
+        .subscriptionStorePolicyDestination(url: Self.termsURL, for: .termsOfService)
+        .subscriptionStorePolicyDestination(url: Self.privacyURL, for: .privacyPolicy)
         .storeButton(.visible, for: .restorePurchases)
         .storeButton(.visible, for: .cancellation)
         .tint(.dlPrimary)
@@ -61,6 +69,9 @@ struct PlusView: View {
         // 「登録する」などの StoreKit の文言も、アプリで選んだ言語にそろえる
         .environment(\.locale, .app)
     }
+
+    private static let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+    private static let privacyURL = Bundle.main.urlSetting("PRIVACY_POLICY_URL") ?? URL(string: "https://www.apple.com/legal/privacy/")!
 
     private func benefit(_ symbol: String, _ title: String, _ detail: String) -> some View {
         HStack(alignment: .top, spacing: 12) {

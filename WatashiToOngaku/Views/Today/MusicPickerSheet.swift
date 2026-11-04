@@ -59,12 +59,14 @@ struct MusicPickerSheet: View {
     private var permissionRequestView: some View {
         VStack(spacing: 16) {
             Image(systemName: "music.note").font(.system(size: 40)).foregroundColor(.dlPrimary)
-            Text(S("Apple Musicから曲を検索するにはアクセスを許可してください",
-                   "Allow access to search songs from Apple Music"))
+            Text(S("曲の検索に Apple Music を使います。次の画面で、アクセスを許可するかどうかを選べます",
+                   "Songs are searched in Apple Music. On the next screen, you can choose whether to allow access",
+                   "곡 검색에 Apple Music을 사용합니다. 다음 화면에서 접근을 허용할지 선택할 수 있습니다"))
                 .multilineTextAlignment(.center)
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 32)
-            Button(S("Apple Musicへのアクセスを許可", "Allow Apple Music Access")) {
+            // 審査の指摘（5.1.1(iv)）：許可を促す言葉ではなく「続ける」にする
+            Button(S("続ける", "Continue", "계속")) {
                 Task { authStatus = await MusicAuthorization.request() }
             }
             .buttonStyle(PrimaryButtonStyle())
