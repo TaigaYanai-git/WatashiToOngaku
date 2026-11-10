@@ -2,6 +2,37 @@ import AppTrackingTransparency
 import GoogleMobileAds
 import UIKit
 
+/// 広告の識別子（IDFA）を使ってよいかを聞く（App Tracking Transparency）。
+/// 広告 SDK は、ここで答えが出るまで初期化も読み込みもしない（答えの前にデータを集めないため）。
+@MainActor
+enum TrackingConsent {
+    private static var task: Task<Void, Never>?
+
+    /// 起動時に呼ぶ。まだ聞いていなければ、アプリが前面に出てから許可のダイアログを出す。
+    /// iOS はアプリが前面でないときや他のダイアログと重なったときに何も出さずに返すことがあるので、出るまでやり直す
+    static func requestIfNeeded() async {
+        if let task { return await task.value }
+        let task = Task { @MainActor in
+            var attempts = 0
+            while ATTrackingManager.trackingAuthorizationStatus == .notDetermined, attempts < 20 {
+                attempts += 1
+                // 前面になるまで待ち、画面が出そろうまで少し置く
+                while UIApplication.shared.applicationState != .active {
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+                try? await Task.sleep(for: .milliseconds(800))
+                guard UIApplication.shared.applicationState == .active else { continue }
+                _ = await ATTrackingManager.requestTrackingAuthorization()
+                if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+        }
+        self.task = task
+        await task.value
+    }
+}
+
 /// タイムラインに挟む広告（AdMob のネイティブ広告）を読み込んでおく。Plus の人には出さない。
 /// 1つの広告は1つの画面にしか出せないので、表示する枠の数だけ読み込む
 @MainActor
@@ -19,7 +50,8 @@ final class NativeAdStore: NSObject, ObservableObject {
 
     private var loader: AdLoader?
     private var todayLoader: AdLoader?
-    private var started = false
+    /// 広告 SDK の初期化（同時に呼ばれても1回だけ行い、全員がその完了を待つ）
+    private var startTask: Task<Void, Never>?
 
     private static var unitID: String { Bundle.main.object(forInfoDictionaryKey: "AdMobNativeUnitID") as? String ?? "" }
 
@@ -29,6 +61,7 @@ final class NativeAdStore: NSObject, ObservableObject {
         guard !PlusStore.shared.isPlus, ads.count < needed, loader?.isLoading != true, !Self.unitID.isEmpty,
               !SocialStore.shared.isPreview else { return }
         await startIfNeeded()
+        guard !PlusStore.shared.isPlus, ads.count < needed, loader?.isLoading != true else { return }
         let options = MultipleAdsAdLoaderOptions()
         options.numberOfAds = needed - ads.count
         let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: [options])
@@ -42,6 +75,7 @@ final class NativeAdStore: NSObject, ObservableObject {
         guard !PlusStore.shared.isPlus, todayAd == nil, todayLoader?.isLoading != true, !Self.unitID.isEmpty,
               !SocialStore.shared.isPreview else { return }
         await startIfNeeded()
+        guard !PlusStore.shared.isPlus, todayAd == nil, todayLoader?.isLoading != true else { return }
         let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: nil)
         loader.delegate = self
         todayLoader = loader
@@ -49,13 +83,15 @@ final class NativeAdStore: NSObject, ObservableObject {
     }
 
     private func startIfNeeded() async {
-        guard !started else { return }
-        started = true
-        // 広告の識別子を使ってよいか聞く（許可されなくても、興味に合わせない広告が出る）
-        if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
-            _ = await ATTrackingManager.requestTrackingAuthorization()
+        if let startTask { return await startTask.value }
+        let task = Task { @MainActor in
+            // 先にトラッキングの許可を聞き、答えが出てから広告 SDK を動かす
+            // （許可されなくても、興味に合わせない広告が出る）
+            await TrackingConsent.requestIfNeeded()
+            _ = await MobileAds.shared.start()
         }
-        _ = await MobileAds.shared.start()
+        startTask = task
+        await task.value
     }
 
     /// slot 番目（0 から）の枠に出す広告

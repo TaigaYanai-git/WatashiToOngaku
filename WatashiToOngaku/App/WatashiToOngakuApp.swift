@@ -79,6 +79,11 @@ private struct AppRootView: View {
         .preferredColorScheme(theme.isDark ? .dark : .light)
         .environmentObject(theme)
         .environmentObject(router)
+        // 起動したら最初に、広告の識別子を使ってよいかを聞く（答えが出るまで広告 SDK は動かない）
+        .task {
+            guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
+            await TrackingConsent.requestIfNeeded()
+        }
         .task {
             await PlusStore.shared.refresh()
             guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }

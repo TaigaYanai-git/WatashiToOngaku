@@ -113,6 +113,8 @@ targets:
         # タイムラインの広告（AdMob）。Plus の人には出さない
         GADApplicationIdentifier: $(ADMOB_APP_ID)
         AdMobNativeUnitID: $(ADMOB_NATIVE_UNIT_ID)
+        # 広告 SDK の計測は、トラッキングの許可を聞いて MobileAds.start() を呼ぶまで始めない
+        GADDelayAppMeasurementInit: true
         NSUserTrackingUsageDescription: あなたに合った広告を表示するために使います。許可しなくても、アプリはこれまでどおり使えます。
         # Google が指定する SKAdNetwork の ID（広告の効果測定に使う）
         SKAdNetworkItems:
