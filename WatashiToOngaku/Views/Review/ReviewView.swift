@@ -143,12 +143,14 @@ struct ReviewView: View {
                         try await AppleMusicService.play(periodEntries.map(\.songID))
                         followsPlayback = true
                     }
+                    .tourTarget(.reviewOrder)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     musicButton(id: "shuffle", label: S("シャッフル再生", "Shuffle")) { Image(systemName: "shuffle") } action: {
                         try await AppleMusicService.play(periodEntries.map(\.songID), shuffle: true)
                         followsPlayback = true
                     }
+                    .tourTarget(.reviewShuffle)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { naming = true } label: {
@@ -157,6 +159,7 @@ struct ReviewView: View {
                     .foregroundColor(.dlPrimary)
                     .disabled(periodEntries.isEmpty || working != nil)
                     .accessibilityLabel(S("ライブラリに保存", "Save to Library"))
+                    .tourTarget(.reviewSave)
                 }
             }
             .sheet(isPresented: $naming) {

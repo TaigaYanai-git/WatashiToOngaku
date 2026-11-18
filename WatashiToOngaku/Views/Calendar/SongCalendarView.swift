@@ -33,6 +33,7 @@ struct SongCalendarView: View {
                             }
                         }
                     }
+                    .tourTarget(.calendarGrid)
                     monthSummary
                 }
                 .padding(.horizontal, 12)

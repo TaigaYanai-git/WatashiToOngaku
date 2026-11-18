@@ -73,6 +73,8 @@ private struct AppRootView: View {
                 .tag(AppTab.settings)
         }
         .tint(.dlPrimary)
+        // はじめて開いた人への使い方ツアー（画面のボタンを照らして説明する）
+        .overlay { AppTourOverlay() }
         .id(theme.language)
         // 日付や時刻の選択などのシステムの表示も、アプリで選んだ言語にする
         .environment(\.locale, .app)
@@ -81,8 +83,20 @@ private struct AppRootView: View {
         .environmentObject(router)
         // 起動したら最初に、広告の識別子を使ってよいかを聞く（答えが出るまで広告 SDK は動かない）
         .task {
-            guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
+            let args = ProcessInfo.processInfo.arguments
+            // スクリーンショット用：-tour で必ずツアーを出す（-tourStep N でその手順から）
+            if args.contains("-tour") {
+                if let i = args.firstIndex(of: "-tourStep"), args.indices.contains(i + 1), let n = Int(args[i + 1]) {
+                    AppTour.shared.start(); AppTour.shared.stepIndex = n
+                } else {
+                    AppTour.shared.start()
+                }
+                return
+            }
+            guard !args.contains("-uiPreview") else { return }
             await TrackingConsent.requestIfNeeded()
+            // 広告の許可に答えたあとで、はじめての人に使い方を見せる
+            AppTour.shared.startIfNeeded()
         }
         .task {
             await PlusStore.shared.refresh()

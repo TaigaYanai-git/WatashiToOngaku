@@ -51,9 +51,11 @@ struct TimelineView: View {
                     // 選んでいるタイムラインの1週間分の曲を、上から順に／シャッフルで Apple Music で聴く
                     ToolbarItem(placement: .navigationBarTrailing) {
                         playButton("order", label: S("1週間分を上から再生", "Play This Week in Order"))
+                            .tourTarget(.timelineOrder)
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         playButton("shuffle", label: S("1週間分をシャッフル再生", "Shuffle This Week"))
+                            .tourTarget(.timelineShuffle)
                     }
                     // 週・月・年のフレンドのプレイリスト
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -73,6 +75,7 @@ struct TimelineView: View {
                         }
                         .foregroundColor(.dlPrimary)
                         .accessibilityLabel(S("フレンド", "Friends"))
+                        .tourTarget(.addFriend)
                     }
                 }
             }
@@ -455,6 +458,7 @@ struct SocialSetupView: View {
                         .textFieldStyle(DarkTextFieldStyle())
                 }
                 .dlCard()
+                .tourTarget(.socialSetup)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(verbatim: S("みんなが気持ちよく使うためのルール", "Community rules"))

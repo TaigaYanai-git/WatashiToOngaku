@@ -473,6 +473,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(S("このアプリについて", "About"))
             VStack(spacing: 10) {
+                row(icon: "hand.point.up.left", title: S("使い方を見る", "How to Use", "사용법 보기"), detail: "") {
+                    router.selectedTab = .today
+                    AppTour.shared.start()
+                }
                 if let url = Bundle.main.urlSetting("PRIVACY_POLICY_URL") {
                     row(icon: "hand.raised", title: S("プライバシーポリシー", "Privacy Policy"), detail: "") { openURL(url) }
                 }

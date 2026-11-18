@@ -142,6 +142,7 @@ struct TodayView: View {
                         Label(S("曲を変える", "Change Song"), systemImage: "arrow.triangle.2.circlepath")
                     }
                     .buttonStyle(SecondaryButtonStyle())
+                    .tourTarget(.pickSong)
                 }
                 // 曲を変えるのはたまにしか使わないので、アイコンだけの小さいボタンにする
                 if entry.appleMusicURL != nil {
@@ -156,6 +157,7 @@ struct TodayView: View {
                         .cornerRadius(18)
                 }
                 .accessibilityLabel(S("曲を変える", "Change Song"))
+                .tourTarget(.pickSong)
                 }
             }
             .font(.subheadline)
@@ -223,6 +225,7 @@ struct TodayView: View {
                       systemImage: "magnifyingglass")
             }
             .buttonStyle(PrimaryButtonStyle())
+            .tourTarget(.pickSong)
         }
         .frame(maxWidth: .infinity)
         .dlCard(padding: 24)
