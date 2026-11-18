@@ -48,15 +48,17 @@ final class AppTour: ObservableObject {
 
 private struct TourTargetModifier: ViewModifier {
     let target: TourTarget
+    @State private var lastFrame: CGRect?
     func body(content: Content) -> some View {
-        content.background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { AppTour.shared.setFrame(geo.frame(in: .global), for: target) }
-                    .onChange(of: geo.frame(in: .global)) { _, rect in AppTour.shared.setFrame(rect, for: target) }
-                    .onDisappear { AppTour.shared.setFrame(nil, for: target) }
+        // ナビゲーションバーの項目は、タブを切り替えた直後に動きながら出てくるので、位置が変わるたびに測り直す。
+        // 別のタブから戻ったときは位置が変わらず知らせが来ないので、覚えておいた位置を入れ直す
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rect in
+                lastFrame = rect
+                AppTour.shared.setFrame(rect, for: target)
             }
-        )
+            .onAppear { if let lastFrame { AppTour.shared.setFrame(lastFrame, for: target) } }
+            .onDisappear { AppTour.shared.setFrame(nil, for: target) }
     }
 }
 
