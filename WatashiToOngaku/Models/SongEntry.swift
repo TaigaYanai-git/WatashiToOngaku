@@ -1,12 +1,13 @@
 import Foundation
 import SwiftData
 
-/// その日に選んだ一曲。1日に1件（dayKey で一意）。
+/// その日に選んだ一曲。1日に1件。
+/// iCloud の同期では一意の制約が使えないので、同じ日が2件になったら EntrySync.mergeDuplicates でまとめる。
 @Model
 final class SongEntry {
     var id: UUID = UUID()
     /// "yyyy-MM-dd"
-    @Attribute(.unique) var dayKey: String = ""
+    var dayKey: String = ""
     /// Apple Music のカタログ ID（MusicItemID.rawValue）
     var songID: String = ""
     var title: String = ""

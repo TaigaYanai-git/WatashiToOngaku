@@ -1,13 +1,28 @@
+import CoreData
 import SwiftData
 import SwiftUI
 
 @MainActor
 enum AppContainer {
+    /// 記録を自分の iCloud（非公開データベース）にも保存して、アプリを入れ直しても戻せるようにする。
+    /// 開発用：シミュレータは実機と同じ Apple アカウントなので、試しの記録が実機の日記に混ざらないよう、
+    /// -cloudSync YES を付けたときだけ同期する
+    static var syncsToICloud: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-uiPreview") { return false }
+        #if DEBUG && targetEnvironment(simulator)
+        return UserDefaults.standard.bool(forKey: "cloudSync")
+        #else
+        return true
+        #endif
+    }
+
     static let shared: ModelContainer = {
         let preview = ProcessInfo.processInfo.arguments.contains("-uiPreview")
-        // フレンド機能のために iCloud（CloudKit）の権限を持っているが、記録の保存は端末内だけにする。
-        // （SwiftData の自動同期は使わず、共有する投稿は SocialStore が自分で CloudKit に置く）
-        let config = ModelConfiguration(isStoredInMemoryOnly: preview, cloudKitDatabase: .none)
+        if !preview { EntrySync.dropOldUniqueIndex(at: URL.applicationSupportDirectory.appending(path: "default.store")) }
+        // 共有する投稿は SocialStore が公開データベースに置く。こちらは本人だけが見る控え
+        let config = ModelConfiguration(isStoredInMemoryOnly: preview,
+                                        cloudKitDatabase: syncsToICloud ? .private(SocialStore.containerID) : .none)
         do {
             return try ModelContainer(for: SongEntry.self, configurations: config)
         } catch {
@@ -98,7 +113,13 @@ private struct AppRootView: View {
             // 広告の許可に答えたあとで、はじめての人に使い方を見せる
             AppTour.shared.startIfNeeded()
         }
+        // iCloud から記録が届いたら、同じ日が2件になっていないか確かめる
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)) { _ in
+            EntrySync.mergeDuplicates(in: AppContainer.shared.mainContext)
+        }
         .task {
+            EntrySync.mergeDuplicates(in: AppContainer.shared.mainContext)
             await PlusStore.shared.refresh()
             guard !ProcessInfo.processInfo.arguments.contains("-uiPreview") else { return }
             // アプリ内のダークモード・テーマカラーとホーム画面のアイコンがずれていたら合わせる
