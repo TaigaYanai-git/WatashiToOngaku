@@ -488,8 +488,8 @@ struct SettingsView: View {
                     .underline()
             }
             .padding(.horizontal, 20)
-            Text(verbatim: S("曲の検索と試聴には Apple Music を使います。選んだ曲・メモはこの iPhone の中だけに保存されます。",
-                             "Songs are searched and previewed with Apple Music. Your songs and notes stay on this iPhone."))
+            Text(verbatim: S("曲の検索と試聴には Apple Music を使います。選んだ曲・メモはこの iPhone と、あなたの iCloud に保存されます。",
+                             "Songs are searched and previewed with Apple Music. Your songs and notes are saved on this iPhone and in your iCloud."))
                 .font(.caption)
                 .foregroundColor(.dlTextSub)
                 .padding(.horizontal, 20)
