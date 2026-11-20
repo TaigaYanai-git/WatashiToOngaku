@@ -4,35 +4,67 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Our Music フレンド招待</title>
+<meta property="og:title" content="Our Music でフレンドになろう">
+<meta property="og:description" content="1日1曲の音楽日記を、フレンドと。">
+<meta name="apple-itunes-app" content="app-id=6827285045">
 <style>
-  :root { --fg:#2e2540; --bg:#f7f4fc; --card:#fff; --accent:#38383f; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#ece6f7; --bg:#1c1724; --card:#26213a; --accent:#c8c4d4; } }
+  :root { --fg:#2e2540; --bg:#f7f4fc; --card:#fff; --accent:#38383f; --sub:#e9e4f2; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ece6f7; --bg:#1c1724; --card:#26213a; --accent:#c8c4d4; --sub:#342d48; } }
   body { font-family: -apple-system, "Hiragino Sans", sans-serif; color:var(--fg); background:var(--bg);
          margin:0; padding:48px 16px; text-align:center; line-height:1.7; }
   .card { max-width:420px; margin:0 auto; background:var(--card); border-radius:24px; padding:32px 20px; }
   img { width:88px; border-radius:20px; }
+  h1 { font-size:1.3rem; }
   .code { font: 700 1.6rem ui-monospace, Menlo, monospace; letter-spacing:.12em; margin:8px 0 20px; }
   a.btn { display:block; padding:16px; border-radius:18px; background:var(--accent); color:var(--bg);
           text-decoration:none; font-weight:700; margin:12px 0; }
+  a.btn.sub { background:var(--sub); color:var(--fg); }
   small { opacity:.7; }
 </style>
 </head>
 <body>
 <div class="card">
   <img src="icon.png" alt="">
-  <h1 style="font-size:1.3rem">Our Music でフレンドになろう</h1>
-  <p>フレンドコード</p>
+  <h1 id="title">Our Music でフレンドになろう</h1>
+  <p id="codeLabel">フレンドコード</p>
   <div class="code" id="code">--------</div>
-  <a class="btn" id="open" href="#">アプリで開いてフレンドになる</a>
-  <p><small>アプリを入れていない場合は、App Store から「Our Music」を入れてから、もう一度このページを開いてください。<br>アプリの「タイムライン」→ 右上のアイコン →「フレンドを追加」にコードを入力しても追加できます。</small></p>
+  <a class="btn" id="store" href="https://apps.apple.com/app/id6827285045">App Store で入手</a>
+  <a class="btn sub" id="open" href="#">アプリを持っている方はこちら</a>
+  <p><small id="note">アプリを入れたら、もう一度このリンクを開くとフレンド申請が送られます。<br>アプリの「タイムライン」→ 右上のアイコン →「フレンドを追加」にコードを入力しても追加できます。</small></p>
 </div>
 <script>
-  // コードは英数字8文字だけを受け付ける
+  // アプリが入っていれば、iOS がこのリンク（ユニバーサルリンク）を直接アプリで開くので、このページは出ない。
+  // ページが出た＝アプリが入っていない（か、LINE などのアプリ内ブラウザ）なので、App Store に案内する。
+  // watashitoongaku:// を自動で開くと、アプリがない人には Safari のエラーが出るので、ボタンを押したときだけ開く。
   const c = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
   document.getElementById('code').textContent = c || '--------';
-  const app = 'watashitoongaku://add?c=' + encodeURIComponent(c);
-  document.getElementById('open').href = app;
-  if (c.length === 8) setTimeout(() => { location.href = app; }, 300);
+  document.getElementById('open').href = 'watashitoongaku://add?c=' + encodeURIComponent(c);
+
+  const lang = (navigator.language || 'ja').slice(0, 2);
+  const t = {
+    en: { title: 'Be friends on Our Music', codeLabel: 'Friend Code', store: 'Get it on the App Store',
+          open: 'I already have the app',
+          note: 'After installing, open this link again to send the friend request.<br>You can also enter the code in Timeline → top-right icon → Add Friend.' },
+    ko: { title: 'Our Music에서 친구가 되어요', codeLabel: '친구 코드', store: 'App Store에서 받기',
+          open: '이미 앱이 있어요',
+          note: '앱을 설치한 뒤 이 링크를 다시 열면 친구 신청이 전송됩니다.<br>앱의 「타임라인」→ 오른쪽 위 아이콘 →「친구 추가」에서 코드를 입력해도 됩니다.' }
+  }[lang];
+  if (t) {
+    document.documentElement.lang = lang;
+    for (const id of ['title', 'codeLabel', 'store', 'open']) document.getElementById(id).textContent = t[id];
+    document.getElementById('note').innerHTML = t.note;
+  }
+
+  // Safari で開いたのにページが出た＝アプリがないので、そのまま App Store へ。
+  // アプリ内ブラウザ（LINE・Instagram など）はアプリが入っていてもページが出るので、自動では移動しない。
+  const ua = navigator.userAgent;
+  const iOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  const inApp = /Line\/|Instagram|FBAN|FBAV|Twitter|MicroMessenger|KAKAOTALK|GSA\/|CriOS|FxiOS|EdgiOS/.test(ua);
+  let shown = false;
+  try { shown = !!sessionStorage.getItem('sent' + c); sessionStorage.setItem('sent' + c, '1'); } catch (e) {}
+  if (iOS && !inApp && c.length === 8 && !shown) {
+    setTimeout(() => { location.href = document.getElementById('store').href; }, 1200);
+  }
 </script>
 </body>
 </html>
