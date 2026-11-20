@@ -29,6 +29,9 @@ struct TimelineView: View {
                 switch social.state {
                 case .notSetUp:
                     SocialSetupView()
+                case .connecting:
+                    ProgressView().tint(.dlPrimary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .unavailable(let message):
                     message_(message)
                 case .ready:

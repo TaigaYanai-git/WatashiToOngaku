@@ -32,11 +32,14 @@ final class SocialStore: ObservableObject {
 
     enum State: Equatable {
         case notSetUp          // ニックネーム未設定（フレンド機能を使っていない）
+        case connecting        // フレンド機能を使っていて、iCloud につないでいるところ
         case unavailable(String)
         case ready
     }
 
-    @Published private(set) var state: State = .notSetUp
+    /// 前にフレンド機能を始めていたら、iCloud の確認が終わるまで「つないでいる」として扱う。
+    /// .notSetUp から始めると、起動直後のタイムラインに「フレンド機能を始める」が一瞬出てしまう
+    @Published private(set) var state: State = SocialStore.hasSavedNickname ? .connecting : .notSetUp
     @Published private(set) var nickname = ""
     @Published private(set) var friendCode = ""
     @Published private(set) var avatarVersion = 0
@@ -84,6 +87,15 @@ final class SocialStore: ObservableObject {
     #else
     private let usesCloud = true
     #endif
+
+    private static var hasSavedNickname: Bool {
+        if let name = UserDefaults.standard.string(forKey: "social_nickname"), !name.isEmpty { return true }
+        #if DEBUG && targetEnvironment(simulator)
+        return false
+        #else
+        return !(NSUbiquitousKeyValueStore.default.string(forKey: "social_nickname") ?? "").isEmpty
+        #endif
+    }
 
     private func value(_ key: String) -> Any? { local.object(forKey: key) ?? (usesCloud ? cloud.object(forKey: key) : nil) }
     private func set(_ value: Any?, _ key: String) {
@@ -403,6 +415,7 @@ final class SocialStore: ObservableObject {
             state = .notSetUp
             return
         }
+        if state != .ready { state = .connecting }
         await setUp(nickname: savedName)
     }
 
