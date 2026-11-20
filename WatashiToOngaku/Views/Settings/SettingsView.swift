@@ -308,7 +308,7 @@ struct SettingsView: View {
                     Text(verbatim: S("Our Music Plus", "Our Music Plus")).font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                     Text(verbatim: plus.isPlus
                          ? S("ご利用ありがとうございます。タップで登録を管理", "Thanks for your support. Tap to manage")
-                         : S("タイムラインを10個まで・1年前まで遡れる・広告なし", "Up to 10 timelines, a year of history, no ads", "타임라인 최대 10개 · 1년 기록 · 광고 없음"))
+                         : S("タイムラインを100個まで・1年前まで遡れる・広告なし", "Up to 100 timelines, a year of history, no ads", "타임라인 최대 100개 · 1년 기록 · 광고 없음"))
                         .font(.caption)
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.leading)

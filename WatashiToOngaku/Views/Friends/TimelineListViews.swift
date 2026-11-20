@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// タイムラインの上に出す切り替えのボタン。「＋」で新しいタイムラインを作る（無料で1つ、Plus なら10個まで）
+/// タイムラインの上に出す切り替えのボタン。「＋」で新しいタイムラインを作る（無料で10個、Plus なら100個まで）
 struct TimelineListBar: View {
     @ObservedObject private var store = TimelineListStore.shared
     @ObservedObject private var plus = PlusStore.shared

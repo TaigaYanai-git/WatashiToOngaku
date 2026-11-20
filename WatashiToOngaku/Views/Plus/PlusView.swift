@@ -24,10 +24,10 @@ struct PlusView: View {
                         .foregroundColor(.dlTextSub)
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 14) {
-                        benefit("rectangle.stack", S("タイムラインを10個まで", "Up to 10 timelines", "타임라인 최대 10개"),
-                                S("「大学」「家族」のように、入れるフレンドを選んだタイムラインを作って切り替えられます。無料では1つまでです",
-                                  "Make timelines with the friends you choose, like \"College\" or \"Family\", and switch between them. Free users can make one",
-                                  "'대학', '가족'처럼 친구를 골라 타임라인을 만들고 전환할 수 있습니다. 무료로는 1개까지입니다"))
+                        benefit("rectangle.stack", S("タイムラインを100個まで", "Up to 100 timelines", "타임라인 최대 100개"),
+                                S("「大学」「家族」のように、入れるフレンドを選んだタイムラインを作って切り替えられます。無料では10個までです",
+                                  "Make timelines with the friends you choose, like \"College\" or \"Family\", and switch between them. Free users can make up to 10",
+                                  "'대학', '가족'처럼 친구를 골라 타임라인을 만들고 전환할 수 있습니다. 무료로는 10개까지입니다"))
                         benefit("clock.arrow.circlepath", S("1年前まで遡れるタイムライン", "A year of timeline history", "1년 전까지 보는 타임라인"),
                                 S("無料では2週間分。Plus なら1年前までのフレンドの投稿を見られます",
                                   "Free shows two weeks. With Plus, scroll back through a year of friends' posts",
