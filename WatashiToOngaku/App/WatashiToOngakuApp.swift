@@ -131,7 +131,7 @@ private struct AppRootView: View {
             }
             await SocialStore.shared.start()
         }
-        // 招待リンク（watashitoongaku://add?c=コード）で開いたらフレンド申請を送る
+        // 招待リンク（https://tora-apple.github.io/ourmusic/add?c=コード のユニバーサルリンク、または watashitoongaku://add?c=コード）で開いたらフレンド申請を送る
         .onOpenURL { url in
             guard SocialStore.code(in: url) != nil else { return }
             Task {

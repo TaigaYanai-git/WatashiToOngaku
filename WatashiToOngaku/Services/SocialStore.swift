@@ -22,7 +22,8 @@ final class SocialStore: ObservableObject {
     static let shared = SocialStore()
 
     static let containerID = "iCloud.com.taigayanai.watashitoongaku"
-    static let inviteBaseURL = "https://taigayanai-git.github.io/WatashiToOngaku/add.html"
+    /// 招待リンク。アプリがあればユニバーサルリンクで直接開き、なければページから App Store に案内する
+    static let inviteBaseURL = "https://tora-apple.github.io/ourmusic/add"
     /// タイムラインに出す期間（日）
     /// タイムラインで遡れる日数。Plus は「さらに読み込む」で30日ずつ、1年前まで遡れる
     static let freeTimelineDays = 14
