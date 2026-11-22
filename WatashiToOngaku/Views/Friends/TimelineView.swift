@@ -20,6 +20,10 @@ struct TimelineView: View {
     @State private var showOffer = false
     /// 再生ボタンで流し始めたら、流れている曲の投稿までスクロールして追いかける
     @State private var followsPlayback = false
+    /// 流れている曲の投稿（今のページがここまでスクロールする）
+    @State private var scrollTarget: String?
+    /// 横にめくっている途中の位置（0 =「みんな」、1 = 1つ目のタイムライン…）。タブの下線を指に合わせて動かす
+    @State private var pageProgress: CGFloat = 0
     @ObservedObject private var musicQueue = SystemMusicPlayer.shared.queue
     @ObservedObject private var musicState = SystemMusicPlayer.shared.state
 
@@ -114,55 +118,21 @@ struct TimelineView: View {
         }
     }
 
+    /// 「みんな」と、作ったタイムラインのページの ID（左から順）
+    private var pageIDs: [String] {
+        [TimelineListStore.allID] + timelineLists.available(isPlus: plus.isPlus).map(\.id)
+    }
+
+    private var currentPageID: String { selectedList?.id ?? TimelineListStore.allID }
+
     private var list: some View {
-        ScrollViewReader { proxy in
-        ScrollView {
-            VStack(spacing: 6) {
+        VStack(spacing: 0) {
             if !social.allFriends.isEmpty {
-                TimelineListBar().padding(.top, 10)
+                TimelineGroupTabs(progress: pageProgress)
             }
-            LazyVStack(spacing: 14) {
-                if posts.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
-                        Text(verbatim: social.allFriends.isEmpty
-                             ? S("フレンドを追加すると、選んだ曲がここに流れます", "Add friends to see their songs here")
-                             : selectedList != nil
-                             ? S("このタイムラインの投稿はまだありません。長押しで入れるフレンドを編集できます", "No posts in this timeline yet. Long-press its name to edit friends.", "이 타임라인에는 아직 게시물이 없습니다. 이름을 길게 눌러 친구를 편집할 수 있습니다")
-                             : S("フレンドの投稿はまだありません", "No posts from friends yet"))
-                            .font(.subheadline)
-                            .foregroundColor(.dlTextSub)
-                            .multilineTextAlignment(.center)
-                        if social.allFriends.isEmpty {
-                            Button(S("フレンドを追加", "Add Friends")) { showFriends = true }
-                                .buttonStyle(PrimaryButtonStyle())
-                                .padding(.horizontal, 40)
-                            // フレンドがまだいない人は、まず公式アカウントの曲から
-                            if let official = social.official, !social.followsOfficial, !social.isOfficialOwner {
-                                OfficialCard(official: official).padding(.top, 8)
-                            }
-                        }
-                    }
-                    .padding(.top, 60)
-                }
-                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
-                    PostCard(post: post, isPlaying: isNowPlaying(post)) { reporting = post }
-                        .id(post.id)
-                    // 投稿5件ごとに広告を挟む（Plus の人には出さない）
-                    if (index + 1) % NativeAdStore.interval == 0, !plus.isPlus,
-                       let ad = adStore.ad(forSlot: (index + 1) / NativeAdStore.interval - 1) {
-                        NativeAdCard(ad: ad)
-                    }
-                }
-                if !posts.isEmpty { loadMoreFooter }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            }
+            pager
         }
-        .refreshable { await social.refresh() }
         .task { await social.refresh() }
-        .task(id: posts.count) { await adStore.load(forPosts: posts.count) }
         // タイムラインの曲が流れている（一時停止中も）あいだは、下に操作バーを出す
         .safeAreaInset(edge: .bottom) {
             if let post = currentPost, let song = currentSong {
@@ -172,34 +142,43 @@ struct TimelineView: View {
         }
         .onChange(of: currentSong) { _, _ in
             guard followsPlayback, let post = weekPosts.first(where: isNowPlaying) else { return }
-            withAnimation { proxy.scrollTo(post.id, anchor: .center) }
+            scrollTarget = post.id
         }
-        }
+        // 横にめくってタイムラインが変わったら、軽く震わせる
+        .sensoryFeedback(.selection, trigger: currentPageID)
     }
 
-    /// タイムラインのいちばん下。Plus はさらに前の投稿を読み込める
-    @ViewBuilder
-    private var loadMoreFooter: some View {
-        if social.canLoadMore {
-            Button {
-                Task { await social.loadMore() }
-            } label: {
-                if social.isLoadingMore {
-                    ProgressView().tint(.dlPrimary)
-                } else {
-                    Text(verbatim: S("さらに前の投稿を読み込む", "Load Earlier Posts", "이전 게시물 더 보기"))
+    /// タイムラインを左右にめくって切り替える
+    private var pager: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(pageIDs, id: \.self) { id in
+                        TimelinePage(list: timelineLists.available(isPlus: plus.isPlus).first { $0.id == id },
+                                     isCurrent: id == currentPageID,
+                                     scrollTarget: scrollTarget,
+                                     isNowPlaying: isNowPlaying,
+                                     onReport: { reporting = $0 },
+                                     onAddFriends: { showFriends = true },
+                                     onPlus: { showPlus = true })
+                            .frame(width: width)
+                            // 指の動きに合わせて、上のタブの下線を動かす
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("timelinePager")).minX } action: { x in
+                                guard let index = pageIDs.firstIndex(of: id), x <= 0.5, x > -width else { return }
+                                pageProgress = CGFloat(index) - x / width
+                            }
+                    }
                 }
+                .scrollTargetLayout()
             }
-            .buttonStyle(SecondaryButtonStyle())
-            .disabled(social.isLoadingMore)
-        } else if !plus.isPlus {
-            Button { showPlus = true } label: {
-                Label(S("Plus なら1年前まで遡れます", "Go back up to a year with Plus", "Plus로 1년 전까지 볼 수 있습니다"), systemImage: "sparkles")
-            }
-            .buttonStyle(SecondaryButtonStyle())
-        } else {
-            Text(verbatim: S("ここより前の投稿はありません", "No earlier posts", "더 이전 게시물이 없습니다"))
-                .font(.caption).foregroundColor(.dlTextLight).padding(.vertical, 8)
+            .coordinateSpace(name: "timelinePager")
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: Binding(
+                get: { currentPageID },
+                set: { if let id = $0 { timelineLists.selectedID = id } }
+            ))
         }
     }
 
@@ -278,6 +257,110 @@ struct TimelineView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// 1つのタイムライン（「みんな」か、作ったタイムライン）の投稿を縦に並べる
+private struct TimelinePage: View {
+    /// nil なら「みんな」
+    let list: TimelineList?
+    /// いま表示しているページか（広告と、再生中の曲への追いかけはこのページだけ）
+    let isCurrent: Bool
+    let scrollTarget: String?
+    let isNowPlaying: (FriendPost) -> Bool
+    let onReport: (FriendPost) -> Void
+    let onAddFriends: () -> Void
+    let onPlus: () -> Void
+    @ObservedObject private var social = SocialStore.shared
+    @ObservedObject private var adStore = NativeAdStore.shared
+    @ObservedObject private var plus = PlusStore.shared
+
+    private var posts: [FriendPost] { social.timeline.filter { TimelineListStore.includes($0, in: list) } }
+
+    var body: some View {
+        let posts = posts
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 14) {
+                    if !social.allFriends.isEmpty {
+                        TimelineMembersRow(list: list)
+                    }
+                    if posts.isEmpty {
+                        emptyState
+                    }
+                    ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                        PostCard(post: post, isPlaying: isNowPlaying(post)) { onReport(post) }
+                            .id(post.id)
+                        // 投稿5件ごとに広告を挟む（Plus の人には出さない）。1つの広告は1か所にしか出せないので、表示中のページだけ
+                        if isCurrent, (index + 1) % NativeAdStore.interval == 0, !plus.isPlus,
+                           let ad = adStore.ad(forSlot: (index + 1) / NativeAdStore.interval - 1) {
+                            NativeAdCard(ad: ad)
+                        }
+                    }
+                    if !posts.isEmpty { loadMoreFooter }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+            .refreshable { await social.refresh() }
+            .task(id: isCurrent ? posts.count : -1) {
+                if isCurrent { await adStore.load(forPosts: posts.count) }
+            }
+            .onChange(of: scrollTarget) { _, id in
+                guard isCurrent, let id, posts.contains(where: { $0.id == id }) else { return }
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
+            Text(verbatim: social.allFriends.isEmpty
+                 ? S("フレンドを追加すると、選んだ曲がここに流れます", "Add friends to see their songs here")
+                 : list != nil
+                 ? S("このタイムラインの投稿はまだありません", "No posts in this timeline yet", "이 타임라인에는 아직 게시물이 없습니다")
+                 : S("フレンドの投稿はまだありません", "No posts from friends yet"))
+                .font(.subheadline)
+                .foregroundColor(.dlTextSub)
+                .multilineTextAlignment(.center)
+            if social.allFriends.isEmpty {
+                Button(S("フレンドを追加", "Add Friends")) { onAddFriends() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .padding(.horizontal, 40)
+                // フレンドがまだいない人は、まず公式アカウントの曲から
+                if let official = social.official, !social.followsOfficial, !social.isOfficialOwner {
+                    OfficialCard(official: official).padding(.top, 8)
+                }
+            }
+        }
+        .padding(.top, 60)
+    }
+
+    /// タイムラインのいちばん下。Plus はさらに前の投稿を読み込める
+    @ViewBuilder
+    private var loadMoreFooter: some View {
+        if social.canLoadMore {
+            Button {
+                Task { await social.loadMore() }
+            } label: {
+                if social.isLoadingMore {
+                    ProgressView().tint(.dlPrimary)
+                } else {
+                    Text(verbatim: S("さらに前の投稿を読み込む", "Load Earlier Posts", "이전 게시물 더 보기"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(social.isLoadingMore)
+        } else if !plus.isPlus {
+            Button { onPlus() } label: {
+                Label(S("Plus なら1年前まで遡れます", "Go back up to a year with Plus", "Plus로 1년 전까지 볼 수 있습니다"), systemImage: "sparkles")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        } else {
+            Text(verbatim: S("ここより前の投稿はありません", "No earlier posts", "더 이전 게시물이 없습니다"))
+                .font(.caption).foregroundColor(.dlTextLight).padding(.vertical, 8)
+        }
     }
 }
 

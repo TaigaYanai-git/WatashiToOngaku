@@ -1,66 +1,147 @@
 import SwiftUI
 
-/// タイムラインの上に出す切り替えのボタン。「＋」で新しいタイムラインを作る（無料で10個、Plus なら100個まで）
-struct TimelineListBar: View {
+/// タイムラインの上の切り替えタブ。下線はタイムラインを横にめくる指に合わせて動く。
+/// 作成・編集・削除は右端のボタンにまとめる（無料で10個、Plus なら100個まで）
+struct TimelineGroupTabs: View {
+    /// 横にめくっている途中の位置（0 =「みんな」、1 = 1つ目のタイムライン…）
+    let progress: CGFloat
     @ObservedObject private var store = TimelineListStore.shared
     @ObservedObject private var plus = PlusStore.shared
-    @ObservedObject private var social = SocialStore.shared
     @State private var editing: TimelineList?
+    @State private var deleting: TimelineList?
     @State private var showPlus = false
+    @State private var frames: [String: CGRect] = [:]
+
+    /// タブの文字の左右の余白。下線は文字の幅に合わせる
+    private static let inset: CGFloat = 10
+
+    private var tabs: [(id: String, name: String, list: TimelineList?)] {
+        [(TimelineListStore.allID, S("みんな", "Everyone", "모두"), nil)]
+            + store.available(isPlus: plus.isPlus).map { ($0.id, $0.name, $0) }
+    }
+
+    private var current: TimelineList? { store.current(isPlus: plus.isPlus) }
+    private var currentID: String { current?.id ?? TimelineListStore.allID }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    chip(S("みんな", "Everyone", "모두"), count: social.allFriends.count, id: TimelineListStore.allID)
-                    Group {
-                        ForEach(store.available(isPlus: plus.isPlus)) { list in
-                            chip(list.name, count: members(of: list).count, id: list.id)
-                                .contextMenu {
-                                    Section(S("メンバー", "Members", "멤버")) {
-                                        ForEach(members(of: list)) { Text(verbatim: $0.nickname) }
-                                    }
-                                    Button(S("編集", "Edit", "편집"), systemImage: "pencil") { editing = list }
-                                    Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { store.delete(list) }
-                                }
+        HStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
+                            tabButton(tab.name, id: tab.id, list: tab.list,
+                                      selected: index == Int(progress.rounded()))
                         }
                     }
-                    // 作れる数を超えていたら、Plus でない人には Plus を案内する
-                    if !plus.isPlus || store.canAddMore(isPlus: true) {
-                        Button {
-                            if store.canAddMore(isPlus: plus.isPlus) { editing = TimelineList(name: "") } else { showPlus = true }
-                        } label: {
-                            Label(S("タイムラインを追加", "Add Timeline", "타임라인 추가"), systemImage: "plus")
-                                .labelStyle(.iconOnly)
-                                .font(.subheadline.weight(.semibold))
-                                .frame(width: 34, height: 34)
-                                .background(Color.dlCard)
-                                .clipShape(Circle())
-                        }
-                        .foregroundColor(.dlPrimary)
-                    }
+                    .padding(.horizontal, 10)
+                    .coordinateSpace(name: "timelineTabs")
+                    .overlay(alignment: .bottomLeading) { indicator }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 2)
+                .onChange(of: currentID) { _, id in
+                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+                }
+                .onAppear { proxy.scrollTo(currentID, anchor: .center) }
             }
-            // 選んでいるタイムラインのメンバー（自分で作ったタイムラインはタップで編集）
-            if let list = store.current(isPlus: plus.isPlus) {
-                memberRow(members(of: list)) { editing = list }
-            } else {
-                memberRow(social.allFriends, edit: nil)
-            }
+            manageMenu
         }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dlDivider).frame(height: 1) }
         .sheet(item: $editing) { TimelineListEditor(list: $0) }
         .sheet(isPresented: $showPlus) { PlusView() }
+        .confirmationDialog(Text(verbatim: S("「\(deleting?.name ?? "")」を削除しますか？", "Delete \"\(deleting?.name ?? "")\"?", "「\(deleting?.name ?? "")」을(를) 삭제할까요?")),
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible, presenting: deleting) { list in
+            Button(S("削除", "Delete", "삭제"), role: .destructive) { store.delete(list) }
+        } message: { _ in
+            Text(verbatim: S("フレンドや投稿は消えません", "Your friends and posts stay.", "친구와 게시물은 사라지지 않습니다"))
+        }
     }
 
-    /// タイムラインに入っているフレンド（フレンドをやめた人は数えない）
-    private func members(of list: TimelineList) -> [Friend] {
-        social.allFriends.filter { list.members.contains($0.code) }
+    private func tabButton(_ name: String, id: String, list: TimelineList?, selected: Bool) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.3)) { store.selectedID = id }
+        } label: {
+            Text(verbatim: name)
+                .font(.subheadline.weight(selected ? .bold : .medium))
+                .foregroundColor(selected ? .dlText : .dlTextSub)
+                .lineLimit(1)
+                .padding(.horizontal, Self.inset)
+                .padding(.top, 8)
+                .padding(.bottom, 11)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .id(id)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("timelineTabs")) } action: { frames[id] = $0 }
+        .contextMenu {
+            if let list {
+                Button(S("編集", "Edit", "편집"), systemImage: "pencil") { editing = list }
+                Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { deleting = list }
+            }
+        }
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func memberRow(_ members: [Friend], edit: (() -> Void)?) -> some View {
-        Button { edit?() } label: {
+    /// 選んでいるタブの下線。めくっている途中は、隣のタブとのあいだを幅ごとなめらかにつなぐ
+    @ViewBuilder
+    private var indicator: some View {
+        let ids = tabs.map(\.id)
+        let p = min(max(progress, 0), CGFloat(max(ids.count - 1, 0)))
+        let i = Int(p.rounded(.down))
+        let f = p - CGFloat(i)
+        if let a = frames[ids[i]] {
+            let b = frames[ids[min(i + 1, ids.count - 1)]] ?? a
+            let x = a.minX + (b.minX - a.minX) * f + Self.inset
+            let w = (a.width + (b.width - a.width) * f) - Self.inset * 2
+            UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2)
+                .fill(Color.dlPrimary)
+                .frame(width: max(w, 8), height: 3)
+                .offset(x: x)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// 作成・編集・削除をまとめたボタン
+    private var manageMenu: some View {
+        Menu {
+            // 作れる数を超えていたら、Plus でない人には Plus を案内する
+            if !plus.isPlus || store.canAddMore(isPlus: true) {
+                Button(S("新しいタイムライン", "New Timeline", "새 타임라인"), systemImage: "plus") {
+                    if store.canAddMore(isPlus: plus.isPlus) { editing = TimelineList(name: "") } else { showPlus = true }
+                }
+            }
+            if let current {
+                Section(current.name) {
+                    Button(S("メンバーと名前を編集", "Edit Name & Members", "이름과 멤버 편집"), systemImage: "pencil") { editing = current }
+                    Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { deleting = current }
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlPrimary)
+                .frame(width: 44, height: 38)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(S("タイムラインを管理", "Manage Timelines", "타임라인 관리"))
+    }
+}
+
+/// タイムラインのいちばん上に出す、そのタイムラインのメンバー（自分で作ったものはタップで編集）
+struct TimelineMembersRow: View {
+    /// nil なら「みんな」
+    let list: TimelineList?
+    @ObservedObject private var social = SocialStore.shared
+    @State private var editing: TimelineList?
+
+    private var members: [Friend] {
+        guard let list else { return social.allFriends }
+        // フレンドをやめた人は数えない
+        return social.allFriends.filter { list.members.contains($0.code) }
+    }
+
+    var body: some View {
+        let members = members
+        Button { editing = list } label: {
             HStack(spacing: 8) {
                 HStack(spacing: -8) {
                     ForEach(members.prefix(5)) { friend in
@@ -70,43 +151,26 @@ struct TimelineListBar: View {
                 }
                 Text(verbatim: members.isEmpty
                      ? S("メンバーがいません。タップして追加", "No members. Tap to add", "멤버가 없습니다. 탭하여 추가")
+                     : list == nil
+                     ? S("フレンド全員（\(members.count)人）", "All friends (\(members.count))", "친구 전체 (\(members.count)명)")
                      : members.map(\.nickname).joined(separator: S("、", ", ", ", ")))
                     .font(.caption)
                     .foregroundColor(.dlTextSub)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                if edit != nil {
-                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundColor(.dlTextLight)
+                if list != nil {
+                    Text(verbatim: S("編集", "Edit", "편집"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.dlPrimary)
                 }
             }
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 2)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .allowsHitTesting(edit != nil)
-        .accessibilityHint(edit == nil ? "" : S("メンバーを編集", "Edit Members", "멤버 편집"))
-    }
-
-    private func chip(_ title: String, count: Int, id: String) -> some View {
-        let selected = (store.current(isPlus: plus.isPlus)?.id ?? TimelineListStore.allID) == id
-        return Button {
-            store.selectedID = id
-        } label: {
-            HStack(spacing: 5) {
-                Text(verbatim: title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                // 人数
-                Text(verbatim: "\(count)")
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundColor(selected ? .white.opacity(0.8) : .dlTextSub)
-            }
-                .padding(.horizontal, 14)
-                .frame(height: 34)
-                .foregroundColor(selected ? .white : .dlText)
-                .background(selected ? Color.dlPrimary : Color.dlCard)
-                .clipShape(Capsule())
-        }
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .allowsHitTesting(list != nil)
+        .accessibilityHint(list == nil ? "" : S("メンバーを編集", "Edit Members", "멤버 편집"))
+        .sheet(item: $editing) { TimelineListEditor(list: $0) }
     }
 }
 
