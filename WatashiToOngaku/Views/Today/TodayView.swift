@@ -271,6 +271,8 @@ struct TodayView: View {
         if let saved = entries.first(where: { $0.dayKey == dayKey }) ?? (try? context.fetch(FetchDescriptor<SongEntry>()))?.first(where: { $0.dayKey == dayKey }) {
             changed(saved)
         }
+        // 今日の曲を選んだら、今日のリマインドを取り消す
+        ReminderStore.shared.refresh()
         Task {
             // 正式名称が分かったら、フレンドに見える投稿のアーティスト名も直す
             await AppleMusicService.fillArtistIDs(in: context)
@@ -291,6 +293,8 @@ struct TodayView: View {
         if let entry { context.delete(entry) }
         memoDraft = ""
         try? context.save()
+        // 今日の曲を消したら、今日のリマインドを戻す
+        ReminderStore.shared.refresh()
     }
 
     /// 入力中のメモを保存する。日付を切り替えたときは、切り替える前の日（key）に保存する

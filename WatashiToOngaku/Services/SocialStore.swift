@@ -629,6 +629,7 @@ final class SocialStore: ObservableObject {
         }
         try? context.save()
         uploadedStamps = stamps
+        if restored > 0 { ReminderStore.shared.refresh() }
         return restored
     }
 

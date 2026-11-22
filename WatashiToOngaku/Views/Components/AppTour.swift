@@ -26,13 +26,15 @@ final class AppTour: ObservableObject {
         if frames[target] != rect { frames[target] = rect }
     }
 
-    /// まだ見ていない、記録も1件もない人にだけ出す（前から使っている人には出さない）
-    func startIfNeeded() {
+    /// まだ見ていない、記録も1件もない人にだけ出す（前から使っている人には出さない）。出したら true
+    @discardableResult
+    func startIfNeeded() -> Bool {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: Self.seenKey) else { return }
+        guard !defaults.bool(forKey: Self.seenKey) else { return false }
         let count = (try? AppContainer.shared.mainContext.fetchCount(FetchDescriptor<SongEntry>())) ?? 0
-        guard count == 0 else { defaults.set(true, forKey: Self.seenKey); return }
+        guard count == 0 else { defaults.set(true, forKey: Self.seenKey); return false }
         start()
+        return true
     }
 
     func start() {
@@ -43,6 +45,8 @@ final class AppTour: ObservableObject {
     func finish() {
         UserDefaults.standard.set(true, forKey: Self.seenKey)
         withAnimation(.easeIn(duration: 0.25)) { isActive = false }
+        // ツアーを閉じたら、毎日のリマインドのために通知の許可を求める（まだ答えていない人だけ）
+        Task { await ReminderStore.shared.requestPermissionIfNeeded() }
     }
 }
 

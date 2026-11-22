@@ -546,6 +546,10 @@ struct SettingsView: View {
     private func updateReminderSummary() {
         let s = ReminderStore.shared
         reminderSummary = s.isEnabled ? String(format: "%d:%02d", s.hour, s.minute) : S("オフ", "Off")
+        // 既定でオンでも、通知を許可していなければ届かないので「オフ」と出す
+        s.checkPermission { status in
+            if status == .denied { reminderSummary = S("オフ", "Off") }
+        }
     }
 }
 
@@ -587,7 +591,7 @@ private struct ReminderSheet: View {
                                 Text(verbatim: S("毎日リマインド", "Daily Reminder"))
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundColor(.dlText)
-                                Text(verbatim: S("設定した時刻に「今日の一曲」を選ぶ通知を送ります", "Get a daily nudge to pick your song of the day"))
+                                Text(verbatim: S("設定した時刻に「今日の一曲」を選ぶ通知を送ります。その日の曲を記録済みなら送りません", "Get a daily nudge to pick your song of the day. No nudge on days you've already picked one"))
                                     .font(.caption)
                                     .foregroundColor(.dlTextSub)
                             }
@@ -669,16 +673,11 @@ private struct ReminderSheet: View {
         ReminderStore.shared.isEnabled = isEnabled
 
         if isEnabled {
-            ReminderStore.shared.requestPermission { granted in
-                if granted {
-                    ReminderStore.shared.schedule()
-                } else {
-                    permissionStatus = .denied
-                    return
-                }
+            ReminderStore.shared.requestPermission { _ in
+                ReminderStore.shared.refresh()
             }
         } else {
-            ReminderStore.shared.cancelAll()
+            ReminderStore.shared.refresh()
         }
         dismiss()
     }

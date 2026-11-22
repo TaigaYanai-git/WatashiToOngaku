@@ -61,6 +61,7 @@ private struct AppRootView: View {
     @StateObject private var theme = ThemeStore.shared
     @StateObject private var router = NavigationRouter()
     @ObservedObject private var invite = PendingInvite.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: Binding(
@@ -111,12 +112,22 @@ private struct AppRootView: View {
             guard !args.contains("-uiPreview") else { return }
             await TrackingConsent.requestIfNeeded()
             // 広告の許可に答えたあとで、はじめての人に使い方を見せる
-            AppTour.shared.startIfNeeded()
+            // ツアーを出す人は、ツアーを閉じたあとに通知の許可を求める（AppTour.finish）。
+            // 出さない人（前から使っている人など）には、広告の許可のあとで求める（まだ答えていなければ）
+            if !AppTour.shared.startIfNeeded() {
+                await ReminderStore.shared.requestPermissionIfNeeded()
+            }
         }
         // iCloud から記録が届いたら、同じ日が2件になっていないか確かめる
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)
             .debounce(for: .seconds(1), scheduler: RunLoop.main)) { _ in
             EntrySync.mergeDuplicates(in: AppContainer.shared.mainContext)
+            // ほかの端末で今日の曲を選んでいたら、今日のリマインドを取り消す
+            ReminderStore.shared.refresh()
+        }
+        // 前面に来るたびにリマインドを予約し直す（日付が進んだ・iCloud から記録が届いた・通知の許可を変えたなど）
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { ReminderStore.shared.refresh() }
         }
         .task {
             EntrySync.mergeDuplicates(in: AppContainer.shared.mainContext)
