@@ -30,7 +30,7 @@ struct TimelineView: View {
                 case .notSetUp:
                     SocialSetupView()
                 case .connecting:
-                    ProgressView().tint(.dlPrimary)
+                    SpinningDisc()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .unavailable(let message):
                     message_(message)
