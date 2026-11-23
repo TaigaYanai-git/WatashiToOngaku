@@ -134,9 +134,9 @@ struct TimelineMembersRow: View {
     @State private var editing: TimelineList?
 
     private var members: [Friend] {
-        guard let list else { return social.allFriends }
+        guard let list else { return social.friends }
         // フレンドをやめた人は数えない
-        return social.allFriends.filter { list.members.contains($0.code) }
+        return social.friends.filter { list.members.contains($0.code) }
     }
 
     var body: some View {
@@ -195,11 +195,11 @@ struct TimelineListEditor: View {
                     TextField(S("名前（例：大学の友達）", "Name (e.g. College friends)", "이름（예: 대학 친구）"), text: $list.name)
                 }
                 Section {
-                    if social.allFriends.isEmpty {
+                    if social.friends.isEmpty {
                         Text(S("フレンドを追加すると、ここで選べます", "Add friends to choose them here", "친구를 추가하면 여기서 고를 수 있습니다"))
                             .foregroundColor(.dlTextSub)
                     }
-                    ForEach(social.allFriends) { friend in
+                    ForEach(social.friends) { friend in
                         Button {
                             if let index = list.members.firstIndex(of: friend.code) {
                                 list.members.remove(at: index)

@@ -30,6 +30,7 @@ DEFINE SCHEMA
         "___recordID"   REFERENCE,
         avatar          ASSET,
         avatarVersion   INT64,
+        hidden          INT64,
         nickname        STRING,
         publicKey       BYTES,
         secret          STRING,
@@ -96,4 +97,83 @@ DEFINE SCHEMA
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_creator"
+    );
+
+    // フレンドの一覧（レコード名 = "fl-<鍵>"）。フレンドのフレンドを探すのに使う。索引なし
+    RECORD TYPE FriendList (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        codes           LIST<STRING>,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // コメント（レコード名 = "c-<投稿のレコード名>-<番号>"）。索引なし
+    RECORD TYPE Comment (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        fromCode        STRING,
+        postedAt        TIMESTAMP,
+        replyTo         STRING,
+        text            STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // 投稿した人が自分の投稿から隠したコメント（レコード名 = "ch-<投稿のレコード名>"）。索引なし
+    RECORD TYPE CommentHide (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        hidden          LIST<STRING>,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // 通知の合図（"p-<目印>" = 投稿、"q-<コード>-<目印の頭>" = コメント）。曲やメモは置かない。
+    // 購読（CKQuerySubscription）に使うので、tag にだけ QUERYABLE の索引を付ける（例外）
+    RECORD TYPE Ping (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        dayKey          STRING,
+        nickname        STRING,
+        tag             STRING QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    // コメントへの絵文字のリアクション（レコード名 = "rx-<投稿のレコード名>-<番号>"）。索引なし
+    RECORD TYPE CommentReaction (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        commentID       STRING,
+        emoji           STRING,
+        fromCode        STRING,
+        reactedAt       TIMESTAMP,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
     );

@@ -36,12 +36,13 @@ enum AppContainer {
 final class PendingInvite: ObservableObject {
     static let shared = PendingInvite()
     @Published var result: String?
-    /// 招待リンクが開発者（OFFICIAL）のもので、フレンドになる前の確認を出す
-    @Published var confirmOfficial = false
 }
 
 @main
 struct WatashiToOngakuApp: App {
+    /// フレンドの通知を受けるため
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
         if ProcessInfo.processInfo.arguments.contains("-uiPreview") {
             SampleData.insert(into: AppContainer.shared.mainContext)
@@ -61,6 +62,7 @@ private struct AppRootView: View {
     @StateObject private var theme = ThemeStore.shared
     @StateObject private var router = NavigationRouter()
     @ObservedObject private var invite = PendingInvite.shared
+    @ObservedObject private var push = PushRouter.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -129,6 +131,11 @@ private struct AppRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { ReminderStore.shared.refresh() }
         }
+        // フレンドの投稿・コメントの通知を押したら、タイムラインを開いて読み直す
+        .onChange(of: push.openTimelineRequests) { _, _ in
+            router.selectedTab = .timeline
+            Task { await SocialStore.shared.refresh() }
+        }
         .task {
             EntrySync.mergeDuplicates(in: AppContainer.shared.mainContext)
             await PlusStore.shared.refresh()
@@ -154,10 +161,6 @@ private struct AppRootView: View {
                     return
                 }
                 let result = await social.addFriend(url: url)
-                if result == .confirmOfficial {
-                    invite.confirmOfficial = true
-                    return
-                }
                 invite.result = result.map(SocialStore.message(for:))
                     ?? (social.lastError ?? S("申請できませんでした", "Couldn't send the request"))
             }
@@ -166,7 +169,6 @@ private struct AppRootView: View {
                isPresented: Binding(get: { invite.result != nil }, set: { if !$0 { invite.result = nil } })) {
             Button("OK") { router.selectedTab = .timeline }
         }
-        .officialFriendConfirmation(isPresented: $invite.confirmOfficial) { invite.result = $0 }
         .onAppear {
             if let tab = UserDefaults.standard.string(forKey: "initialTab") {
                 router.selectedTab = ["timeline": .timeline, "calendar": .calendar, "review": .review, "settings": .settings][tab] ?? .today

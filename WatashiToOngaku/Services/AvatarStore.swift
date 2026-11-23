@@ -16,6 +16,8 @@ final class AvatarStore: ObservableObject {
 
     private let memory = NSCache<NSString, UIImage>()
     private var loading = Set<String>()
+    /// 端末に無いと分かっている版（表示のたびにファイルを探しに行かないように）。届いたら外す
+    private var missing = Set<String>()
     private let folder: URL = {
         let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("avatars")
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -28,7 +30,11 @@ final class AvatarStore: ObservableObject {
         guard version > 0 else { return nil }
         let key = "\(code)-\(version)" as NSString
         if let cached = memory.object(forKey: key) { return cached }
-        guard let image = UIImage(contentsOfFile: file(code: code, version: version).path) else { return nil }
+        guard !missing.contains(key as String) else { return nil }
+        guard let image = UIImage(contentsOfFile: file(code: code, version: version).path) else {
+            missing.insert(key as String)
+            return nil
+        }
         memory.setObject(image, forKey: key)
         return image
     }
@@ -44,6 +50,7 @@ final class AvatarStore: ObservableObject {
                   let asset = record["avatar"] as? CKAsset, let source = asset.fileURL else { return }
             try? FileManager.default.removeItem(at: file(code: code, version: version))
             try? FileManager.default.copyItem(at: source, to: file(code: code, version: version))
+            missing.remove("\(code)-\(version)")
             revision += 1
         }
     }
@@ -51,6 +58,7 @@ final class AvatarStore: ObservableObject {
     /// 自分のアイコンを端末にも置いておく（アップロード直後から表示するため）
     func storeOwn(_ data: Data, code: String, version: Int) {
         try? data.write(to: file(code: code, version: version))
+        missing.remove("\(code)-\(version)")
         revision += 1
     }
 
@@ -77,16 +85,12 @@ struct AvatarView: View {
     let version: Int
     let nickname: String
     var size: CGFloat = 36
-    /// 開発者（公式アカウント）なら、写真ではなく開発者のアイコンにする
-    var isDeveloper = false
     @ObservedObject private var store = AvatarStore.shared
 
     var body: some View {
         let _ = store.revision
         Group {
-            if isDeveloper {
-                DeveloperAvatar()
-            } else if let image = store.image(code: code, version: version) {
+            if let image = store.image(code: code, version: version) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 DefaultAvatar(size: size)
@@ -95,20 +99,18 @@ struct AvatarView: View {
         .frame(width: size, height: size)
         .clipShape(Circle())
         .accessibilityHidden(true)
+        // 画面に出たときに、まだ端末に無い画像を読む（フレンドのフレンドなど、先に読んでいない人の分）
+        .task(id: "\(code)-\(version)") {
+            let social = SocialStore.shared
+            guard version > 0, !social.isPreview, social.state == .ready else { return }
+            store.fetchIfNeeded(code: code, version: version, in: social.publicDB)
+        }
     }
 }
 
 extension AvatarView {
     init(friend: Friend, size: CGFloat = 36) {
-        self.init(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: size,
-                  isDeveloper: friend.isOfficial || friend.isDeveloper)
-    }
-}
-
-/// 開発者のアイコン：標準（ブラック）のアプリアイコンをそのまま使う
-private struct DeveloperAvatar: View {
-    var body: some View {
-        Image("IconPreview-AppIcon").resizable().scaledToFill()
+        self.init(code: friend.code, version: friend.avatarVersion, nickname: friend.nickname, size: size)
     }
 }
 

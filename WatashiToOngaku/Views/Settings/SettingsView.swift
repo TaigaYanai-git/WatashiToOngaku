@@ -26,17 +26,25 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 24) {
                     profileSection
                     plusSection
                     themeSection
                     languageSection
-                    settingsSection
-                    if social.state == .ready { friendsSection }
+                    settingsSection.id("notifications")
+                    if social.state == .ready { friendsSection.id("friends") }
                     aboutSection
                 }
                 .padding(.vertical, 16)
+            }
+            // スクリーンショット用：-uiPreview -previewScroll notifications|friends でその項目まで送る
+            .task {
+                guard social.isPreview, let id = UserDefaults.standard.string(forKey: "previewScroll") else { return }
+                try? await Task.sleep(for: .milliseconds(500))
+                proxy.scrollTo(id, anchor: .top)
+            }
             }
             .background(DlBackground().ignoresSafeArea())
             .navigationTitle(Text(verbatim: S("設定", "Settings")))
@@ -384,13 +392,23 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(S("フレンド", "Friends"))
             VStack(spacing: 10) {
-                if social.isOfficialOwner {
-                    officialOwnerRow
-                }
                 row(icon: "person.2", title: S("フレンド一覧", "Friend List", "친구 목록"),
-                    detail: S("\(social.allFriends.count)人", "\(social.allFriends.count)", "\(social.allFriends.count)명")) {
+                    detail: S("\(social.friends.count)人", "\(social.friends.count)", "\(social.friends.count)명")) {
                     showFriendList = true
                 }
+                // フレンドのフレンドに自分を出す（オフにすると「フレンドのフレンド」に出ない）
+                VStack(alignment: .leading, spacing: 6) {
+                    toggleRow(icon: "person.3", title: S("フレンドのフレンドに表示", "Show to Friends of Friends", "친구의 친구에게 표시"),
+                              isOn: Binding(get: { !social.hidesFromFriendsOfFriends },
+                                            set: { show in Task { await social.setHidesFromFriendsOfFriends(!show) } }))
+                    Text(verbatim: S("オンにすると、フレンドのフレンドの画面にあなたが表示され、フレンド申請を受け取れます。",
+                                     "When on, friends of your friends can see you and send you a friend request.",
+                                     "켜면 친구의 친구에게 내가 표시되어 친구 신청을 받을 수 있습니다."))
+                        .font(.caption)
+                        .foregroundColor(.dlTextSub)
+                }
+                .dlCard()
+                .padding(.horizontal, 20)
                 row(icon: "hand.raised.slash", title: S("ブロックしたユーザー", "Blocked Users"),
                     detail: social.blockedUsers.isEmpty ? S("なし", "None") : S("\(social.blockedUsers.count)人", "\(social.blockedUsers.count)", "\(social.blockedUsers.count)명")) {
                     showBlocked = true
@@ -439,34 +457,44 @@ struct SettingsView: View {
         }
     }
 
-    /// 公式アカウントの持ち主だけ：自分の曲を公式として公開する
-    private var officialOwnerRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: Binding(get: { social.publishesOfficial }, set: { on in Task { await social.setPublishesOfficial(on) } })) {
-                Label(S("公式アカウントとして公開", "Publish as Official Account", "공식 계정으로 공개"), systemImage: "checkmark.seal")
-                    .font(.subheadline)
-                    .foregroundColor(.dlText)
-            }
-            .tint(.dlPrimary)
-            Text(verbatim: S("共有した曲とメモが、開発者としてフレンドになった人全員に見えます。フレンドになるコードは「\(SocialStore.officialCode)」です。",
-                             "Your shared songs and notes are visible to everyone who becomes friends with you as the developer. Their code: \(SocialStore.officialCode)",
-                             "공유한 곡과 메모가 개발자로서 친구가 된 모든 사람에게 보입니다. 친구 코드: \(SocialStore.officialCode)"))
-                .font(.caption)
-                .foregroundColor(.dlTextSub)
-        }
-        .dlCard()
-        .padding(.horizontal, 20)
-    }
-
     // MARK: - Settings
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle(S("通知", "Notifications"))
-            row(icon: "bell", title: S("毎日のリマインダー", "Daily Reminder"), detail: reminderSummary) {
-                showReminderSheet = true
+            VStack(spacing: 10) {
+                row(icon: "bell", title: S("毎日のリマインダー", "Daily Reminder"), detail: reminderSummary) {
+                    showReminderSheet = true
+                }
+                // フレンドの投稿・コメントの通知（フレンド機能を使っている人だけ）
+                if social.state == .ready {
+                    VStack(alignment: .leading, spacing: 12) {
+                        toggleRow(icon: "music.note.house", title: S("フレンドの投稿", "Friends' Posts", "친구의 게시물"),
+                                  isOn: Binding(get: { social.notifiesFriendPosts }, set: { social.notifiesFriendPosts = $0 }))
+                        toggleRow(icon: "heart", title: S("自分の投稿へのいいね", "Likes on Your Posts", "내 게시물의 좋아요"),
+                                  isOn: Binding(get: { social.notifiesLikes }, set: { social.notifiesLikes = $0 }))
+                        toggleRow(icon: "bubble.left", title: S("自分の投稿へのコメント", "Comments on Your Posts", "내 게시물의 댓글"),
+                                  isOn: Binding(get: { social.notifiesComments }, set: { social.notifiesComments = $0 }))
+                        Text(verbatim: S("フレンドが今日の一曲を選んだときと、あなたの曲にいいね・コメントが付いたときに通知します。",
+                                         "Get notified when friends pick their song of the day and when someone likes or comments on your song.",
+                                         "친구가 오늘의 한 곡을 골랐을 때와 내 곡에 좋아요·댓글이 달렸을 때 알려 줍니다."))
+                            .font(.caption)
+                            .foregroundColor(.dlTextSub)
+                    }
+                    .dlCard()
+                    .padding(.horizontal, 20)
+                }
             }
         }
+    }
+
+    private func toggleRow(icon: String, title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Label(title, systemImage: icon)
+                .font(.subheadline)
+                .foregroundColor(.dlText)
+        }
+        .tint(.dlPrimary)
     }
 
     private var aboutSection: some View {
@@ -495,12 +523,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
             #if DEBUG
             Toggle(S("開発用：Plus を有効にする", "Debug: Enable Plus"), isOn: $plus.debugOverride)
-                .font(.caption)
-                .tint(.dlPrimary)
-                .padding(.horizontal, 20)
-            // この端末（の Apple アカウント）を公式アカウントの持ち主にする。iCloud に控えるので App Store 版にも引き継ぐ
-            Toggle(S("開発用：公式アカウントの持ち主にする", "Debug: Official Account Owner"),
-                   isOn: Binding(get: { social.isOfficialOwner }, set: { social.isOfficialOwner = $0 }))
                 .font(.caption)
                 .tint(.dlPrimary)
                 .padding(.horizontal, 20)

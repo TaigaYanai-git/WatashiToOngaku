@@ -10,6 +10,8 @@ struct TimelineView: View {
     @ObservedObject private var timelineLists = TimelineListStore.shared
     @Environment(\.openURL) private var openURL
     @State private var showFriends = false
+    @State private var previewComments: FriendPost?
+    @State private var previewProfile: Friend?
     @State private var showProfile = false
     @State private var showPlaylist = false
     @State private var showPlus = false
@@ -18,6 +20,7 @@ struct TimelineView: View {
     @State private var playing: String?
     @State private var playError: String?
     @State private var showOffer = false
+    @State private var bulkRequest: SpotifyBulkRequest?
     /// 再生ボタンで流し始めたら、流れている曲の投稿までスクロールして追いかける
     @State private var followsPlayback = false
     /// 流れている曲の投稿（今のページがここまでスクロールする）
@@ -50,8 +53,7 @@ struct TimelineView: View {
                 if social.state == .ready {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button { showProfile = true } label: {
-                            AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 30,
-                                       isDeveloper: social.isOfficialOwner)
+                            AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: 30)
                         }
                         .accessibilityLabel(S("プロフィール", "Profile"))
                     }
@@ -87,12 +89,27 @@ struct TimelineView: View {
                 }
             }
             .sheet(isPresented: $showFriends) { FriendsView() }
+            .sheet(item: $previewComments) { CommentsSheet(post: $0) }
+            .sheet(item: $previewProfile) { FriendProfileSheet(friend: $0) }
+            // スクリーンショット用：-uiPreview -previewSheet friends|comments で画面を開く
+            .task {
+                guard social.isPreview else { return }
+                try? await Task.sleep(for: .milliseconds(600))
+                switch UserDefaults.standard.string(forKey: "previewSheet") {
+                case "friends": showFriends = true
+                case "comments": previewComments = social.timeline.first
+                case "friendComments": previewComments = social.timeline.first { !$0.friend.isMe }
+                case "profile": previewProfile = social.friends.first
+                default: break
+                }
+            }
             .sheet(isPresented: $showPlaylist) { FriendPlaylistView() }
             .sheet(isPresented: $showPlus) { PlusView() }
             .alert(Text(verbatim: playError ?? ""), isPresented: Binding(get: { playError != nil }, set: { if !$0 { playError = nil } })) {
                 Button("OK", role: .cancel) {}
             }
             .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
+            .spotifyBulkNotice($bulkRequest)
             .sheet(isPresented: $showProfile) {
                 VStack(spacing: 20) {
                     Text(verbatim: S("プロフィール", "Profile")).font(.headline).foregroundColor(.dlText)
@@ -127,7 +144,7 @@ struct TimelineView: View {
 
     private var list: some View {
         VStack(spacing: 0) {
-            if !social.allFriends.isEmpty {
+            if !social.friends.isEmpty {
                 TimelineGroupTabs(progress: pageProgress)
             }
             pager
@@ -218,7 +235,7 @@ struct TimelineView: View {
     }
 
     private func playButton(_ id: String, label: String) -> some View {
-        Button { play(id) } label: {
+        Button { SpotifyBulkRequest.run(pending: $bulkRequest) { play(id) } } label: {
             if playing == id {
                 ProgressView().tint(.dlPrimary)
             } else if id == "order" {
@@ -282,7 +299,7 @@ private struct TimelinePage: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 14) {
-                    if !social.allFriends.isEmpty {
+                    if !social.friends.isEmpty {
                         TimelineMembersRow(list: list)
                     }
                     if posts.isEmpty {
@@ -316,7 +333,7 @@ private struct TimelinePage: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.2.wave.2").font(.largeTitle).foregroundColor(.dlTextLight)
-            Text(verbatim: social.allFriends.isEmpty
+            Text(verbatim: social.friends.isEmpty
                  ? S("フレンドを追加すると、選んだ曲がここに流れます", "Add friends to see their songs here")
                  : list != nil
                  ? S("このタイムラインの投稿はまだありません", "No posts in this timeline yet", "이 타임라인에는 아직 게시물이 없습니다")
@@ -324,14 +341,10 @@ private struct TimelinePage: View {
                 .font(.subheadline)
                 .foregroundColor(.dlTextSub)
                 .multilineTextAlignment(.center)
-            if social.allFriends.isEmpty {
+            if social.friends.isEmpty {
                 Button(S("フレンドを追加", "Add Friends")) { onAddFriends() }
                     .buttonStyle(PrimaryButtonStyle())
                     .padding(.horizontal, 40)
-                // フレンドがまだいない人は、まず公式アカウントの曲から
-                if let official = social.official, !social.followsOfficial, !social.isOfficialOwner {
-                    OfficialCard(official: official).padding(.top, 8)
-                }
             }
         }
         .padding(.top, 60)
@@ -369,13 +382,22 @@ private struct PostCard: View {
     /// ミュージックで今流れている曲
     var isPlaying = false
     let onReport: () -> Void
-    @Environment(\.openURL) private var openURL
     @ObservedObject private var social = SocialStore.shared
+    @State private var showComments = false
+    @State private var showProfile = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                AvatarView(friend: post.friend)
+                // フレンドのアイコンを押すと、その人のプロフィールとフレンドの一覧
+                // 自分の投稿はボタンにしない（disabled にするとアイコンが薄く表示されるため）
+                if post.friend.isMe {
+                    AvatarView(friend: post.friend)
+                } else {
+                    Button { showProfile = true } label: { AvatarView(friend: post.friend) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(S("\(post.friend.nickname)さんのプロフィール", "\(post.friend.nickname)'s profile", "\(post.friend.nickname)님의 프로필"))
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     // 名前は1行。長ければ末尾を省き、「（あなた）」や印は残す
                     HStack(spacing: 4) {
@@ -383,22 +405,11 @@ private struct PostCard: View {
                             .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                        Group {
-                            if post.friend.isMe {
-                                Text(verbatim: S("（あなた）", "(you)", "(나)"))
-                                    .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
-                            }
-                            if post.friend.isOfficial || post.friend.isDeveloper { OfficialBadge() }
-                            if post.friend.isFollower {
-                                Text(verbatim: S("開発者のフレンド", "Developer's friend", "개발자의 친구"))
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(.dlPrimary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.dlPrimaryBg))
-                            }
+                        if post.friend.isMe {
+                            Text(verbatim: S("（あなた）", "(you)", "(나)"))
+                                .font(.subheadline.weight(.semibold)).foregroundColor(.dlText)
+                                .fixedSize()
                         }
-                        .fixedSize()
                     }
                     // 日付と、いつ選んだか（「2時間前」）。流れている曲なら印
                     HStack(spacing: 6) {
@@ -410,14 +421,8 @@ private struct PostCard: View {
                 }
                 Spacer(minLength: 0)
                 Menu {
-                    if let link = post.appleMusicURL.flatMap(URL.init(string:)) {
-                        Button(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note") { openURL(link) }
-                    }
-                    if post.friend.isOfficial {
-                        Button(S("フレンドをやめる", "Remove Friend", "친구 끊기"), systemImage: "person.badge.minus") {
-                            Task { await social.setFollowsOfficial(false) }
-                        }
-                    } else if !post.friend.isMe {
+                    ListenMenuItems(title: post.title, artist: post.artist, appleMusicURL: post.appleMusicURL)
+                    if !post.friend.isMe {
                         Button(S("通報してブロック", "Report & Block"), systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
                     }
                 } label: {
@@ -451,8 +456,11 @@ private struct PostCard: View {
                     .font(.caption)
                     .foregroundColor(.dlTextSub)
             }
+            if social.canComment(on: post) { commentRow }
         }
         .dlCard()
+        .sheet(isPresented: $showComments) { CommentsSheet(post: post) }
+        .sheet(isPresented: $showProfile) { FriendProfileSheet(friend: post.friend) }
         // 画面に出たら、この投稿のいいねを読む（タイムラインを更新したら読み直す）
         .task(id: "\(post.id)#\(social.likesGeneration)") { social.requestLikes(for: post) }
         .overlay {
@@ -464,6 +472,36 @@ private struct PostCard: View {
     }
 
     private var likers: [Friend] { social.likers[post.dayKey] ?? [] }
+
+    private var comments: [PostComment] { social.comments[post.id] ?? [] }
+
+    /// 新しいコメント2件と、コメントの画面への入口。どこを押してもコメントの画面を開く
+    private var commentRow: some View {
+        Button { showComments = true } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(comments.suffix(2)) { comment in
+                    (Text(verbatim: comment.isMine ? S("あなた", "You", "나") : comment.nickname)
+                        .font(.caption.weight(.semibold)).foregroundColor(.dlText)
+                     + Text(verbatim: "  " + comment.text).font(.caption).foregroundColor(.dlText))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.left")
+                    Text(verbatim: comments.count > 2
+                         ? S("コメント\(comments.count)件をすべて見る", "View all \(comments.count) comments", "댓글 \(comments.count)개 모두 보기")
+                         : comments.isEmpty ? S("コメントする", "Add a comment", "댓글 달기")
+                         : S("返信する", "Reply", "답글 달기"))
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            }
+            .padding(.top, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(S("コメント \(comments.count)件", "\(comments.count) comments", "댓글 \(comments.count)개"))
+    }
 
     private static let artworkSize: CGFloat = 88
     private static let goldenRatio: CGFloat = 1.618
@@ -493,16 +531,13 @@ private struct PostCard: View {
         }
     }
 
-    /// 数えきれないほど多ければ「99+」
-    private var likeCountText: String {
-        social.likeOverflow.contains(post.dayKey) ? "\(likers.count)+" : "\(likers.count)"
-    }
+    private var likeCountText: String { "\(likers.count)" }
 
     /// 「Mioさん、Kenさんがいいねしました」。4人以上なら「Mioさん、Kenさん、Yuiさんほか5人」
     private var likersText: String {
         let shown = likers.prefix(3).map(\.nickname)
         let rest = likers.count - shown.count
-        let more = social.likeOverflow.contains(post.dayKey) ? "+" : ""
+        let more = ""
         return S("\(shown.map { $0 + "さん" }.joined(separator: "、"))\(rest > 0 ? "ほか\(rest)\(more)人" : "")がいいねしました",
                  "Liked by \(shown.joined(separator: ", "))\(rest > 0 ? " and \(rest)\(more) others" : "")",
                  "\(shown.map { $0 + "님" }.joined(separator: ", "))\(rest > 0 ? " 외 \(rest)\(more)명" : "")이 좋아요를 눌렀습니다")

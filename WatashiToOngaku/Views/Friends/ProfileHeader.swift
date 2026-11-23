@@ -14,12 +14,9 @@ struct ProfileHeader: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // 開発者は、写真ではなく開発者のアイコン。写真を設定していれば、選び直すか、はずすかを選ぶ
+            // 写真を設定していれば、選び直すか、はずすかを選ぶ
             Group {
-                if social.isOfficialOwner {
-                    AvatarView(code: social.friendCode, version: social.avatarVersion, nickname: social.nickname, size: size,
-                               isDeveloper: true)
-                } else if social.avatarVersion > 0 {
+                if social.avatarVersion > 0 {
                     Menu {
                         Button(S("写真を選ぶ", "Choose Photo", "사진 선택"), systemImage: "photo") { showPicker = true }
                         Button(S("写真をはずす", "Remove Photo", "사진 삭제"), systemImage: "trash", role: .destructive) {
@@ -59,13 +56,11 @@ struct ProfileHeader: View {
                     Image(systemName: "pencil").font(.caption).foregroundColor(.dlTextSub)
                 }
             }
-            if !social.isOfficialOwner {
             Text(verbatim: social.avatarVersion > 0
                  ? S("アイコンをタップして、写真を変えたりはずしたりできます", "Tap the icon to change or remove the photo", "아이콘을 탭해 사진을 바꾸거나 삭제할 수 있습니다")
                  : S("アイコンをタップして写真を選べます", "Tap the icon to choose a photo"))
                 .font(.caption2)
                 .foregroundColor(.dlTextLight)
-            }
         }
         .alert(Text(verbatim: S("ニックネーム", "Nickname")), isPresented: $editingName) {
             TextField("", text: $nameDraft)

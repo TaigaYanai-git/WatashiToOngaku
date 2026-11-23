@@ -20,6 +20,7 @@ struct ReviewView: View {
     @State private var working: String?
     @State private var musicError: String?
     @State private var showOffer = false
+    @State private var bulkRequest: SpotifyBulkRequest?
     @State private var savedName: String?
     /// 保存する前に名前を決めるシート
     @State private var naming = false
@@ -153,7 +154,7 @@ struct ReviewView: View {
                     .tourTarget(.reviewShuffle)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { naming = true } label: {
+                    Button { SpotifyBulkRequest.run(save: true, pending: $bulkRequest) { naming = true } } label: {
                         if working == "save" { ProgressView().tint(.dlPrimary) } else { Image(systemName: "plus.square.on.square") }
                     }
                     .foregroundColor(.dlPrimary)
@@ -185,13 +186,14 @@ struct ReviewView: View {
                 Button("OK", role: .cancel) {}
             }
             .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
+            .spotifyBulkNotice($bulkRequest)
         }
     }
 
     private func musicButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
                                          action: @escaping () async throws -> Void) -> some View {
         Button {
-            run(id, action)
+            SpotifyBulkRequest.run(pending: $bulkRequest) { run(id, action) }
         } label: {
             if working == id { ProgressView().tint(.dlPrimary) } else { icon() }
         }

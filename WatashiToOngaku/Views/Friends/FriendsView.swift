@@ -11,7 +11,6 @@ struct FriendsView: View {
     @State private var showMyQR = false
     @State private var message: String?
     @State private var declining: PendingFriend?
-    @State private var confirmingOfficial = false
 
     var body: some View {
         NavigationStack {
@@ -19,10 +18,9 @@ struct FriendsView: View {
                 VStack(spacing: 18) {
                     if !social.incomingRequests.isEmpty { incomingCard }
                     myCard
-                    // 開発者とはまだフレンドでなければ、誘う
-                    if let official = social.official, !social.followsOfficial, !social.isOfficialOwner { OfficialCard(official: official) }
                     addCard
                     if !social.outgoingRequests.isEmpty { outgoingCard }
+                    if !social.suggestions.isEmpty { FriendSuggestionsCard() }
                     FriendListCard()
                 }
                 .padding(20)
@@ -55,7 +53,6 @@ struct FriendsView: View {
                 Text(verbatim: S("相手には知らせません。ブロックすると、この人からの申請はもう届きません。",
                                  "They won't be notified. Blocking stops further requests from them."))
             }
-            .officialFriendConfirmation(isPresented: $confirmingOfficial) { message = $0 }
             .refreshable { await social.refresh() }
             .task { await social.refresh() }
         }
@@ -184,80 +181,7 @@ struct FriendsView: View {
             return
         }
         codeInput = ""
-        if result == .confirmOfficial {
-            confirmingOfficial = true
-        } else {
-            message = SocialStore.message(for: result)
-        }
-    }
-}
-
-/// 開発者とフレンドになる誘い。申請はすぐ通り、開発者の毎日の一曲がタイムラインに流れる
-struct OfficialCard: View {
-    let official: Friend
-    @ObservedObject private var social = SocialStore.shared
-    @State private var confirming = false
-    @State private var message: String?
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AvatarView(friend: official, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(official.nickname).font(.subheadline.weight(.semibold)).foregroundColor(.dlText).lineLimit(1)
-                    OfficialBadge()
-                }
-                Text(verbatim: S("開発者とフレンドになると、毎日の一曲がタイムラインに流れます。あなたが共有した曲も開発者に届き、いいねが付くことがあります",
-                                 "Be friends with the developer to see their daily song. Your shared songs also reach the developer, who may like them",
-                                 "개발자와 친구가 되면 매일의 한 곡이 타임라인에 흐릅니다. 공유한 곡도 개발자에게 전달되며, 좋아요를 받을 수 있습니다"))
-                    .font(.caption).foregroundColor(.dlTextSub)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            Button {
-                confirming = true
-            } label: {
-                Text(verbatim: S("フレンドになる", "Add Friend", "친구 되기"))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(LinearGradient.dlPrimary))
-            }
-        }
-        .dlCard()
-        .officialFriendConfirmation(isPresented: $confirming) { message = $0 }
-        .alert(Text(verbatim: message ?? ""), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
-            Button("OK") {}
-        }
-    }
-}
-
-extension View {
-    /// 開発者とフレンドになる前の確認。「フレンドになる」を選んだら befriendOfficial を呼び、結果の文を渡す
-    func officialFriendConfirmation(isPresented: Binding<Bool>, done: @escaping (String) -> Void) -> some View {
-        alert(Text(verbatim: SocialStore.officialConfirmTitle), isPresented: isPresented) {
-            Button(S("キャンセル", "Cancel", "취소"), role: .cancel) {}
-            Button(S("フレンドになる", "Add Friend", "친구 되기")) {
-                Task { done(SocialStore.message(for: await SocialStore.shared.befriendOfficial())) }
-            }
-        } message: {
-            Text(verbatim: SocialStore.officialConfirmMessage)
-        }
-    }
-}
-
-/// 公式アカウント（開発者）の印
-struct OfficialBadge: View {
-    var body: some View {
-        Text(verbatim: S("開発者", "Developer", "개발자"))
-            .font(.caption2.weight(.semibold))
-            .foregroundColor(.dlPrimary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(Color.dlPrimaryBg))
-            // 名前が長くても、印は縮めない
-            .fixedSize()
+        message = SocialStore.message(for: result)
     }
 }
 
@@ -352,10 +276,12 @@ private struct QRScannerRepresentable: UIViewControllerRepresentable {
 struct FriendListCard: View {
     @ObservedObject private var social = SocialStore.shared
     @State private var removing: Friend?
+    /// アイコン・名前を押して開くプロフィール（その人のフレンドの一覧から申請できる）
+    @State private var profile: Friend?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            let friends = social.allFriends
+            let friends = social.friends
             Text(verbatim: S("フレンド（\(friends.count)人）", "Friends (\(friends.count))", "친구 (\(friends.count)명)"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.dlTextSub)
@@ -367,48 +293,137 @@ struct FriendListCard: View {
             }
             ForEach(friends) { friend in
                 HStack(spacing: 12) {
-                    AvatarView(friend: friend)
-                    Text(friend.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
-                    if friend.isOfficial || friend.isDeveloper { OfficialBadge() }
-                    Spacer()
+                    Button { profile = friend } label: {
+                        HStack(spacing: 12) {
+                            AvatarView(friend: friend)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(friend.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
+                                // 共通のフレンド
+                                if let mutual = social.mutualFriends[friend.code], !mutual.isEmpty {
+                                    Text(verbatim: S("共通のフレンド：\(mutual.joined(separator: "、"))",
+                                                     "Mutual: \(mutual.joined(separator: ", "))",
+                                                     "함께 아는 친구: \(mutual.joined(separator: ", "))"))
+                                        .font(.caption)
+                                        .foregroundColor(.dlTextSub)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(S("\(friend.nickname)さんのプロフィール", "\(friend.nickname)'s profile", "\(friend.nickname)님의 프로필"))
                     Button { removing = friend } label: {
                         Image(systemName: "ellipsis").foregroundColor(.dlTextSub).frame(width: 30, height: 30)
                     }
                 }
             }
-            // 持ち主：開発者としてフレンドになってくれた人は、多くなるので人数だけ出す
-            if social.isOfficialOwner, social.publishesOfficial {
-                Divider()
-                HStack(spacing: 6) {
-                    OfficialBadge()
-                    Text(verbatim: S("開発者としてのフレンド \(social.followers.count)人",
-                                     "Friends as the developer: \(social.followers.count)",
-                                     "개발자로서의 친구 \(social.followers.count)명"))
-                        .font(.subheadline)
-                        .foregroundColor(.dlText)
-                }
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dlCard()
+        .sheet(item: $profile) { FriendProfileSheet(friend: $0) }
         .confirmationDialog(Text(verbatim: removing.map { S("\($0.nickname)さん", $0.nickname, "\($0.nickname)님") } ?? ""),
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             titleVisibility: .visible, presenting: removing) { friend in
-            if friend.isOfficial {
-                Button(S("フレンドをやめる", "Remove Friend"), role: .destructive) { Task { await social.setFollowsOfficial(false) } }
-            } else {
-                Button(S("フレンドをやめる", "Remove Friend"), role: .destructive) { Task { await social.remove(friend, block: false) } }
-                Button(S("ブロックする", "Block"), role: .destructive) { Task { await social.remove(friend, block: true) } }
-            }
+            Button(S("フレンドをやめる", "Remove Friend"), role: .destructive) { Task { await social.remove(friend, block: false) } }
+            Button(S("ブロックする", "Block"), role: .destructive) { Task { await social.remove(friend, block: true) } }
         } message: { friend in
-            Text(verbatim: friend.isOfficial
-                 ? S("開発者の曲がタイムラインに流れなくなり、あなたの曲も開発者に届かなくなります。コード「\(SocialStore.officialCode)」でいつでもまたフレンドになれます。",
-                     "You'll stop seeing the developer's songs, and yours will no longer reach them. Enter \(SocialStore.officialCode) anytime to be friends again.",
-                     "개발자의 곡이 타임라인에 표시되지 않고, 내 곡도 개발자에게 전달되지 않습니다. 코드 \(SocialStore.officialCode)로 언제든 다시 친구가 될 수 있습니다.")
-                 : S("フレンドをやめる：お互いの曲が見えなくなります。あなたのフレンドコードは新しくなるので、また申請し合えばフレンドに戻れます。\nブロックする：この人からの申請も届かなくなります。設定の「ブロックしたユーザー」で解除できます。",
+            Text(verbatim: S("フレンドをやめる：お互いの曲が見えなくなります。あなたのフレンドコードは新しくなるので、また申請し合えばフレンドに戻れます。\nブロックする：この人からの申請も届かなくなります。設定の「ブロックしたユーザー」で解除できます。",
                      "Remove: you'll stop seeing each other's songs. Your friend code changes, so you can become friends again by sending a new request.\nBlock: you also won't get requests from them. You can unblock in Settings > Blocked Users.",
                      "친구 끊기: 서로의 곡이 보이지 않게 됩니다. 내 친구 코드가 새로 바뀌므로, 다시 신청하면 친구가 될 수 있습니다.\n차단: 이 사람의 신청도 받지 않습니다. 설정의 '차단한 사용자'에서 해제할 수 있습니다."))
         }
     }
 
+}
+
+/// フレンドのフレンド。共通のフレンドがいる人に、そのまま申請できる
+struct FriendSuggestionsCard: View {
+    @ObservedObject private var social = SocialStore.shared
+    @State private var showsAll = false
+    @State private var working: String?
+    @State private var message: String?
+    private static let collapsedCount = 5
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(verbatim: S("フレンドのフレンド", "Friends of Friends", "친구의 친구"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+            ForEach(showsAll ? social.suggestions : Array(social.suggestions.prefix(Self.collapsedCount))) { person in
+                HStack(spacing: 12) {
+                    AvatarView(code: person.code, version: person.avatarVersion, nickname: person.nickname)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(person.nickname).font(.subheadline).foregroundColor(.dlText).lineLimit(1)
+                        Text(verbatim: Self.viaText(person.via)).font(.caption).foregroundColor(.dlTextSub).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    button(for: person)
+                }
+            }
+            if !showsAll, social.suggestions.count > Self.collapsedCount {
+                Button(S("すべて見る（\(social.suggestions.count)人）", "Show All (\(social.suggestions.count))", "모두 보기 (\(social.suggestions.count)명)")) {
+                    showsAll = true
+                }
+                .font(.subheadline)
+                .foregroundColor(.dlPrimary)
+            }
+            Text(verbatim: S("フレンドのフレンドが表示されます。設定の「フレンドのフレンドに表示」をオフにすると、あなたはほかの人に表示されません。",
+                             "People your friends are friends with. Turn off \"Show to Friends of Friends\" in Settings to hide yourself.",
+                             "친구의 친구가 표시됩니다. 설정에서 '친구의 친구에게 표시'를 끄면 다른 사람에게 표시되지 않습니다."))
+                .font(.caption)
+                .foregroundColor(.dlTextLight)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dlCard()
+        .alert(Text(verbatim: message ?? ""), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button("OK") {}
+        }
+    }
+
+    @ViewBuilder
+    private func button(for person: FriendSuggestion) -> some View {
+        switch social.status(of: person) {
+        case .requested:
+            Text(verbatim: S("申請済み", "Requested", "신청함"))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.dlTextSub)
+        case .canRequest, .incoming:
+            let incoming = social.status(of: person) == .incoming
+            Button {
+                working = person.code
+                Task {
+                    let result = await social.addFriend(code: person.code)
+                    working = nil
+                    message = result.map(SocialStore.message(for:)) ?? (social.lastError ?? S("申請できませんでした", "Couldn't send the request"))
+                }
+            } label: {
+                Group {
+                    if working == person.code {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(verbatim: incoming ? S("承認", "Accept") : S("申請", "Request"))
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(LinearGradient.dlPrimary))
+            }
+            .disabled(working != nil)
+        }
+    }
+
+    /// 「Mioさん、Kenさんのフレンド」。3人以上なら「Mioさんほか2人のフレンド」
+    static func viaText(_ names: [String]) -> String {
+        guard let first = names.first else { return "" }
+        switch names.count {
+        case 1: return S("\(first)さんのフレンド", "Friends with \(first)", "\(first)님의 친구")
+        case 2: return S("\(first)さん、\(names[1])さんのフレンド", "Friends with \(first) and \(names[1])", "\(first)님, \(names[1])님의 친구")
+        default:
+            let rest = names.count - 1
+            return S("\(first)さんほか\(rest)人のフレンド", "Friends with \(first) and \(rest) others", "\(first)님 외 \(rest)명의 친구")
+        }
+    }
 }

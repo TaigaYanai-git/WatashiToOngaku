@@ -128,13 +128,18 @@ struct TodayView: View {
                 }
             }
             HStack(spacing: 10) {
-                if let link = entry.appleMusicURL.flatMap(URL.init(string:)) {
-                    Button {
-                        openURL(link)
+                if entry.appleMusicURL != nil || !entry.title.isEmpty {
+                    // 押したときに Apple Music か Spotify かを選ぶ（前に選んだほうが上）
+                    Menu {
+                        ListenMenuItems(title: entry.title, artist: entry.artistDisplayName, appleMusicURL: entry.appleMusicURL)
                     } label: {
-                        Label(S("Apple Musicで聴く", "Open in Apple Music"), systemImage: "music.note")
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.circle")
+                            Text(verbatim: S("聴く", "Listen", "듣기"))
+                            Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                        }
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(SecondaryButtonStyle())
                 } else {
@@ -145,7 +150,7 @@ struct TodayView: View {
                     .tourTarget(.pickSong)
                 }
                 // 曲を変えるのはたまにしか使わないので、アイコンだけの小さいボタンにする
-                if entry.appleMusicURL != nil {
+                if entry.appleMusicURL != nil || !entry.title.isEmpty {
                 Button {
                     showPicker = true
                 } label: {

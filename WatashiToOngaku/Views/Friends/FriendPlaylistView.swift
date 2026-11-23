@@ -29,6 +29,7 @@ struct FriendPlaylistView: View {
     @State private var musicError: String?
     @State private var savedName: String?
     @State private var showOffer = false
+    @State private var bulkRequest: SpotifyBulkRequest?
     @State private var showPlus = false
     /// 保存する前に名前を決めるシート
     @State private var naming = false
@@ -127,6 +128,7 @@ struct FriendPlaylistView: View {
                 Button("OK", role: .cancel) {}
             }
             .musicSubscriptionOffer(isPresented: $showOffer, options: MusicSubscriptionOffer.Options(messageIdentifier: .playMusic))
+            .spotifyBulkNotice($bulkRequest)
         }
     }
 
@@ -184,14 +186,14 @@ struct FriendPlaylistView: View {
                 try await AppleMusicService.play(posts.map(\.songID), shuffle: true)
             }
             actionButton(id: "save", label: S("保存", "Save", "저장")) { Image(systemName: "plus.square.on.square") } onTap: {
-                naming = true
+                SpotifyBulkRequest.run(save: true, pending: $bulkRequest) { naming = true }
             }
         }
     }
 
     private func actionButton<Icon: View>(id: String, label: String, @ViewBuilder icon: () -> Icon,
                                           action: @escaping () async throws -> Void) -> some View {
-        actionButton(id: id, label: label, icon: icon) { run(id, action) }
+        actionButton(id: id, label: label, icon: icon) { SpotifyBulkRequest.run(pending: $bulkRequest) { run(id, action) } }
     }
 
     private func run(_ id: String, _ action: @escaping () async throws -> Void) {

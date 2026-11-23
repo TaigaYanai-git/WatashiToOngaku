@@ -59,25 +59,29 @@ final class SocialStore: ObservableObject {
     @Published private(set) var likedByMe: Set<String> = []
     /// 自分の投稿（日付）にいいねしたフレンド
     @Published private(set) var likers: [String: [Friend]] = [:]
-    /// 公式アカウント（公開されていれば）
-    @Published private(set) var official: Friend?
-    /// 公式アカウント（開発者）とフレンドになっているか。中では一方通行のフォローとして扱う
-    @Published private(set) var followsOfficial = false
-    /// この端末が公式アカウントの持ち主で、自分の曲を公式として公開しているか
-    @Published private(set) var publishesOfficial = false
-    /// 持ち主：公式アカウントとフレンドになった人（投稿を読む鍵を届けてくれた人）
-    @Published private(set) var followers: [Friend] = []
     @Published var lastError: String?
+    /// フレンドのフレンド（申請できる人）。共通のフレンドが多い順
+    @Published var suggestions: [FriendSuggestion] = []
+    /// フレンドのコード → そのフレンドとの共通のフレンドのニックネーム
+    @Published var mutualFriends: [String: [String]] = [:]
+    /// フレンドのコード → そのフレンドのフレンドのコード（フレンドが置いた一覧）
+    @Published var friendListsByCode: [String: [String]] = [:]
+    /// フレンドのフレンドのうち、まだフレンドでない人のプロフィール（コード → 人）
+    @Published var fofProfiles: [String: FriendSuggestion] = [:]
+    /// コメントの ID → 絵文字のリアクション
+    @Published var commentReactions: [String: [CommentReaction]] = [:]
+    /// 投稿の ID（FriendPost.id）→ コメント（古い順）
+    @Published var comments: [String: [PostComment]] = [:]
 
     var inviteURL: URL? {
         friendCode.isEmpty ? nil : URL(string: "\(Self.inviteBaseURL)?c=\(friendCode)")
     }
 
-    private var publicDB: CKDatabase { CKContainer(identifier: Self.containerID).publicCloudDatabase }
+    var publicDB: CKDatabase { CKContainer(identifier: Self.containerID).publicCloudDatabase }
 
     // MARK: - 端末に残す情報（iCloud の Key-Value にも控えて、入れ直しても引き継ぐ）
 
-    private let local = UserDefaults.standard
+    let local = UserDefaults.standard
     private let cloud = NSUbiquitousKeyValueStore.default
 
     /// 開発用：シミュレータでは iCloud の Key-Value を使わない。
@@ -97,25 +101,25 @@ final class SocialStore: ObservableObject {
         #endif
     }
 
-    private func value(_ key: String) -> Any? { local.object(forKey: key) ?? (usesCloud ? cloud.object(forKey: key) : nil) }
-    private func set(_ value: Any?, _ key: String) {
+    func value(_ key: String) -> Any? { local.object(forKey: key) ?? (usesCloud ? cloud.object(forKey: key) : nil) }
+    func set(_ value: Any?, _ key: String) {
         local.set(value, forKey: key)
         guard usesCloud else { return }
         cloud.set(value, forKey: key)
         cloud.synchronize()
     }
 
-    private var secret: String {
+    var secret: String {
         get { value("social_secret") as? String ?? "" }
         set { set(newValue, "social_secret") }
     }
     /// フレンド（コード・相手の鍵・相手の iCloud 利用者）。相手が承認して鍵を届けてくれたら加わる
-    private var links: [FriendLink] {
+    var links: [FriendLink] {
         get { (value("social_links") as? Data).flatMap { try? JSONDecoder().decode([FriendLink].self, from: $0) } ?? [] }
         set { set(try? JSONEncoder().encode(newValue), "social_links") }
     }
     /// 自分が申請して、承認を待っている相手のコード
-    private var outgoingCodes: [String] {
+    var outgoingCodes: [String] {
         get { value("social_outgoing") as? [String] ?? [] }
         set { set(newValue, "social_outgoing") }
     }
@@ -132,7 +136,7 @@ final class SocialStore: ObservableObject {
         set(key.rawRepresentation.base64EncodedString(), "social_privateKey")
         return key
     }
-    private var blocked: Set<String> {
+    var blocked: Set<String> {
         get { Set(value("social_blocked") as? [String] ?? []) }
         set { set(Array(newValue), "social_blocked"); updateBlockedUsers() }
     }
@@ -161,109 +165,42 @@ final class SocialStore: ObservableObject {
         set { local.set(Array(newValue), forKey: "social_handledRequests") }
     }
 
-    // MARK: - 公式アカウント
+    // MARK: - 開発者とフレンドになる機能（公式アカウント）の後片付け
     //
-    // 開発者と誰でもフレンドになれる。画面ではふつうのフレンドと同じに見せるが、中では一方通行のフォローで、
-    // 承認も人数の上限もない（ふつうのフレンドの申請の枠は 64 しかなく、持ち主が全員の投稿を読むことになるため）。
-    // - プロフィールはレコード "official-profile"、投稿は "o-<日付>"（誰でも読める。中身は公開してよいものだけ）
-    // - 公式として書けるのは、開発用ビルドで「公式アカウントの持ち主」にした端末（iCloud の Key-Value に控える）だけ
-    // - フォローする側は、投稿を置いた iCloud 利用者がプロフィールを置いた人と同じかを確かめる
-    // - フォローすると、公式の「郵便受け」（"of-<番号>"）に自分のコードと鍵（公式の公開鍵でしか開けない）を置く。
-    //   持ち主はこれでフォロワーの投稿を読み、公式としていいねできる（"l-<投稿>-OFFICIAL"）
-    // - 公式の投稿へのいいねは OfficialLike（"ol-<日付>-<ランダム>"）に置き、持ち主は日付で検索する。
-    //   索引を付けるのはこの型の dayKey だけ（公式の投稿はもともと公開なので、他人の投稿を探し出せることにはならない）
+    // 1.0.x にあった「開発者とフレンドになる」機能はなくした。前の版で使っていた人の分を、iCloud から1回だけ消す。
+    // - フォローしていた人：公式の郵便受け（"of-<番号>"）に置いた自分の鍵と、公式の投稿へのいいね（"ol-…"）
+    // - 持ち主（開発者の端末）：公式のプロフィール（"official-profile"）と公式の投稿（"o-<日付>"）
+    // 消せなかったら控えを残し、次に起動したときにやり直す。
 
-    /// フォロー用のコード。ふつうのフレンドコードには O と I を使わないので、重ならない
-    static let officialCode = "OFFICIAL"
-    private static let officialProfileID = CKRecord.ID(recordName: "official-profile")
-
-    private static func officialPostID(_ dayKey: String) -> CKRecord.ID {
-        CKRecord.ID(recordName: "o-\(dayKey)")
-    }
-
-    /// 画面に出すフレンド：ふつうのフレンドと、フレンドになった公式アカウント（開発者）。
-    /// 公式の持ち主とふつうのフレンドでもあるなら、公式のほうは重ねて出さない
-    var allFriends: [Friend] {
-        guard followsOfficial, !isOfficialOwner, let official,
-              !links.contains(where: { $0.creator == officialCreator }) else { return friends }
-        return [official] + friends
-    }
-
-    /// 公式アカウントの持ち主の端末か（開発用ビルドの設定で決める）
-    var isOfficialOwner: Bool {
-        get { value("official_owner") as? Bool ?? false }
-        set { set(newValue, "official_owner"); objectWillChange.send() }
-    }
-
-    /// 公式のプロフィールを置いた iCloud 利用者（これと違う人が置いた投稿は出さない）
-    private var officialCreator: String?
-
-    /// 公式の公開鍵（フォロワーが鍵を届けるのに使う）
-    private var officialPublicKey: Data?
-
-    /// フォローしたときに鍵を置いた郵便受けの枠
-    private var officialFollowSlot: String? {
-        get { value("official_followSlot") as? String }
-        set { set(newValue, "official_followSlot") }
-    }
-    /// 公式の投稿に付けたいいね：日付 → レコード名
-    private var officialLikes: [String: String] {
-        get { value("official_likes") as? [String: String] ?? [:] }
-        set { set(newValue, "official_likes") }
-    }
-
-    private var officialStamps: [String: String] {
-        get { local.dictionary(forKey: "official_uploaded") as? [String: String] ?? [:] }
-        set { local.set(newValue, forKey: "official_uploaded") }
-    }
-
-    func setFollowsOfficial(_ follows: Bool) async {
-        followsOfficial = follows
-        set(follows, "official_follow")
-        if follows {
-            await refresh()
-        } else {
-            timeline.removeAll { $0.friend.isOfficial }
-            await withdrawFromOfficial()
+    private func removeOfficialLeftovers() async {
+        guard state == .ready, !isPreview else { return }
+        var ids: [CKRecord.ID] = []
+        if let slot = value("official_followSlot") as? String { ids.append(CKRecord.ID(recordName: slot)) }
+        ids += ((value("official_likes") as? [String: String]) ?? [:]).values.map { CKRecord.ID(recordName: $0) }
+        let ownsOfficial = (value("official_owner") as? Bool ?? false) && (value("official_publish") as? Bool ?? false)
+        if ownsOfficial {
+            let stamps = local.dictionary(forKey: "official_uploaded") as? [String: String] ?? [:]
+            let days = Set(localEntries.map(\.dayKey)).union(stamps.keys)
+            ids += days.map { CKRecord.ID(recordName: "o-\($0)") } + [CKRecord.ID(recordName: "official-profile")]
         }
-    }
-
-    /// 公式の郵便受けに、自分のコードと鍵を置く（コードを作り直したときは同じ枠を書き換える）
-    private func sendKeyToOfficial() async {
-        guard followsOfficial, !isOfficialOwner, state == .ready, let publicKey = officialPublicKey,
-              let payload = try? Self.seal(secret, from: friendCode, to: Self.officialCode, publicKey: publicKey) else { return }
-        let fields: [String: CKRecordValue] = ["fromCode": friendCode as NSString, "payload": payload as NSData]
-        if let slot = officialFollowSlot {
-            let record = CKRecord(recordType: "FriendRequest", recordID: CKRecord.ID(recordName: slot))
-            for (key, value) in fields { record[key] = value }
-            if (try? await save(record)) != nil { return }
+        for chunk in ids.chunked(200) {
+            guard let (_, deleted) = try? await publicDB.modifyRecords(saving: [], deleting: chunk) else { return }
+            // もう無いものは消えたとみなす
+            let failed = chunk.contains { id in
+                guard case .failure(let error)? = deleted[id] else { return false }
+                return (error as? CKError)?.code != .unknownItem
+            }
+            if failed { return }
         }
-        let slot = await claimSlot(prefix: "of-", type: "FriendRequest", fields: fields)
-        // 置いているあいだにフレンドをやめていたら、置いた鍵をすぐ消す
-        guard followsOfficial else {
-            if let slot { _ = try? await publicDB.modifyRecords(saving: [], deleting: [CKRecord.ID(recordName: slot)]) }
-            return
+        for key in ["official_follow", "official_followSlot", "official_likes", "official_owner", "official_publish"] {
+            local.removeObject(forKey: key)
+            if usesCloud { cloud.removeObject(forKey: key) }
         }
-        officialFollowSlot = slot
-    }
-
-    /// フォローをやめる・フレンド機能をやめる：公式に届けた鍵と、公式の投稿へのいいねを消す
-    private func withdrawFromOfficial() async {
-        let ids = ([officialFollowSlot].compactMap { $0 } + officialLikes.values).map { CKRecord.ID(recordName: $0) }
-        guard !ids.isEmpty, let (_, deleted) = try? await publicDB.modifyRecords(saving: [], deleting: ids) else { return }
-        // 1件でも消せなかったら（もう無いものは消えたとみなす）、控えを残して次の機会にやり直す
-        let failed = ids.contains { id in
-            guard case .failure(let error)? = deleted[id] else { return false }
-            return (error as? CKError)?.code != .unknownItem
-        }
-        guard !failed else { return }
-        officialFollowSlot = nil
-        officialLikes = [:]
-        likedByMe = likedByMe.filter { !$0.hasPrefix("o-") }
+        local.removeObject(forKey: "official_uploaded")
     }
 
     /// "<prefix><番号>" の枠のうち、空いている最初の枠に置く。誰かに先を越されたら次の枠へ
-    private func claimSlot(prefix: String, type: String, fields: [String: CKRecordValue]) async -> String? {
+    func claimSlot(prefix: String, type: String, fields: [String: CKRecordValue]) async -> String? {
         var start = 0
         while start < 5000 {
             let ids = (start..<start + 100).map { CKRecord.ID(recordName: "\(prefix)\($0)") }
@@ -281,136 +218,12 @@ final class SocialStore: ObservableObject {
         return nil
     }
 
-    /// 枠を順に読む（いくつかの prefix をまとめて）。100 枠まとめて空なら、その先は読まない
-    private func readSlots(_ prefixes: [String]) async -> [String: [CKRecord]] {
-        var result: [String: [CKRecord]] = [:]
-        var pending = prefixes, start = 0
-        while !pending.isEmpty, start < 5000 {
-            let ids = pending.flatMap { prefix in (start..<start + 100).map { CKRecord.ID(recordName: "\(prefix)\($0)") } }
-            var found: [CKRecord.ID: CKRecord] = [:]
-            for chunk in ids.chunked(200) {
-                guard let results = try? await publicDB.records(for: chunk) else { return result }
-                for case let (id, .success(record)) in results { found[id] = record }
-            }
-            pending = pending.filter { prefix in
-                let records = (start..<start + 100).compactMap { found[CKRecord.ID(recordName: "\(prefix)\($0)")] }
-                result[prefix, default: []] += records
-                return !records.isEmpty
-            }
-            start += 100
-        }
-        return result
-    }
-
-    /// 枠に置かれたコードが、そのコードの持ち主本人が置いたものか確かめて、フレンドの形にする
-    private func verifiedSenders(_ records: [CKRecord]) async -> [(record: CKRecord, friend: Friend)] {
-        let codes = Set(records.compactMap { $0["fromCode"] as? String }).subtracting(blocked)
-        guard !codes.isEmpty, let owners = try? await publicDB.records(for: codes.map { CKRecord.ID(recordName: $0) },
-                                                                      desiredKeys: ["nickname", "avatarVersion"]) else { return [] }
-        return records.compactMap { record in
-            guard let code = record["fromCode"] as? String, codes.contains(code),
-                  case .success(let owner)? = owners[CKRecord.ID(recordName: code)],
-                  owner.creatorUserRecordID?.recordName == record.creatorUserRecordID?.recordName else { return nil }
-            let version = owner["avatarVersion"] as? Int ?? 0
-            AvatarStore.shared.fetchIfNeeded(code: code, version: version, in: publicDB)
-            return (record, Friend(code: code, nickname: owner["nickname"] as? String ?? S("フォロワー", "Follower", "팔로워"),
-                                   secret: "", avatarVersion: version, isFollower: true))
-        }
-    }
-
-    /// 持ち主：郵便受けからフォロワーと、その投稿を読む鍵を取り出す（フレンドでもある人はフレンドとして出す）
-    private func loadFollowers() async {
-        guard isOfficialOwner, publishesOfficial else { followers = []; return }
-        let records = await readSlots(["of-"])["of-"] ?? []
-        let friendCodes = Set(links.map(\.code))
-        var seen = Set<String>()
-        followers = await verifiedSenders(records).compactMap { item in
-            guard !friendCodes.contains(item.friend.code), seen.insert(item.friend.code).inserted,
-                  let payload = item.record["payload"] as? Data,
-                  let secret = Self.open(payload, with: keyPair, from: item.friend.code, to: Self.officialCode) else { return nil }
-            let friend = item.friend
-            return Friend(code: friend.code, nickname: friend.nickname, secret: secret, avatarVersion: friend.avatarVersion, isFollower: true)
-        }
-    }
-
-    /// 公式のプロフィールを読む
-    private func loadOfficial() async {
-        guard let results = try? await publicDB.records(for: [Self.officialProfileID], desiredKeys: ["nickname", "avatarVersion", "publicKey"]),
-              case .success(let record)? = results[Self.officialProfileID] else {
-            official = nil
-            officialCreator = nil
-            return
-        }
-        let version = record["avatarVersion"] as? Int ?? 0
-        let code = Self.officialProfileID.recordName
-        AvatarStore.shared.fetchIfNeeded(code: code, version: version, in: publicDB)
-        officialCreator = record.creatorUserRecordID?.recordName
-        officialPublicKey = record["publicKey"] as? Data
-        official = Friend(code: code, nickname: record["nickname"] as? String ?? "Our Music", secret: "",
-                          avatarVersion: version, isOfficial: true)
-    }
-
-    /// 持ち主：自分の曲を公式として公開する／やめる（やめると公式の投稿とプロフィールを消す）
-    func setPublishesOfficial(_ publish: Bool) async {
-        guard isOfficialOwner, state == .ready else { return }
-        publishesOfficial = publish
-        set(publish, "official_publish")
-        if publish {
-            await syncOfficial()
-        } else {
-            let ids = Set(localEntries.map(\.dayKey)).union(officialStamps.keys).map(Self.officialPostID) + [Self.officialProfileID]
-            for chunk in ids.chunked(200) {
-                _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
-            }
-            officialStamps = [:]
-            followers = []
-        }
-        await loadOfficial()
-    }
-
-    /// 持ち主：公式のプロフィール（ニックネームとアイコン）と、前回から変わった投稿を置く
-    private func syncOfficial() async {
-        guard isOfficialOwner, publishesOfficial, state == .ready, !isPreview else { return }
-        let profile = (try? await publicDB.record(for: Self.officialProfileID))
-            ?? CKRecord(recordType: "FriendCode", recordID: Self.officialProfileID)
-        let publicKey = keyPair.publicKey.rawRepresentation
-        if profile["nickname"] as? String != nickname || profile["avatarVersion"] as? Int ?? 0 != avatarVersion
-            || profile["publicKey"] as? Data != publicKey {
-            profile["nickname"] = nickname
-            profile["publicKey"] = publicKey
-            if avatarVersion == 0 {
-                profile["avatar"] = nil
-                profile["avatarVersion"] = nil
-            } else if FileManager.default.fileExists(atPath: myAvatarFile.path) {
-                profile["avatar"] = CKAsset(fileURL: myAvatarFile)
-                profile["avatarVersion"] = avatarVersion
-                AvatarStore.shared.storeOwn((try? Data(contentsOf: myAvatarFile)) ?? Data(), code: Self.officialProfileID.recordName,
-                                            version: avatarVersion)
-            }
-            do { _ = try await save(profile) } catch {
-                print("[Social] official profile failed: \(Self.describe(error))")
-                return
-            }
-        }
-        var stamps = officialStamps
-        let changed = localEntries.filter { stamps[$0.dayKey] != Self.stamp($0) }
-        for chunk in changed.chunked(200) {
-            let saving = chunk.filter(\.shareSong).map { postRecord($0, id: Self.officialPostID($0.dayKey)) }
-            let deleting = chunk.filter { !$0.shareSong }.map { Self.officialPostID($0.dayKey) }
-            guard (try? await publicDB.modifyRecords(saving: saving, deleting: deleting, savePolicy: .allKeys)) != nil else { break }
-            for entry in chunk { stamps[entry.dayKey] = Self.stamp(entry) }
-        }
-        officialStamps = stamps
-    }
-
     // MARK: - はじめる
 
     /// 起動時：以前フレンド機能を使っていたら、読み込んで更新する
     func start() async {
         cloud.synchronize()
         updateBlockedUsers()
-        followsOfficial = value("official_follow") as? Bool ?? false
-        publishesOfficial = isOfficialOwner && (value("official_publish") as? Bool ?? false)
         guard let savedName = value("social_nickname") as? String, !savedName.isEmpty else {
             state = .notSetUp
             return
@@ -439,6 +252,7 @@ final class SocialStore: ObservableObject {
             try await publishFriendCode()
 
             state = .ready
+            await removeOfficialLeftovers()
             // アプリを入れ直したら、iCloud に置いてある自分の投稿から記録を戻す（入れるたびに1回）
             if !local.bool(forKey: "social_restoredOnce") {
                 let count = await restoreFromCloud()
@@ -456,12 +270,14 @@ final class SocialStore: ObservableObject {
     }
 
     /// コード → ニックネーム・公開鍵 の対応表を置く（鍵は置かない）
-    private func publishFriendCode() async throws {
+    func publishFriendCode() async throws {
         let id = CKRecord.ID(recordName: friendCode)
         let record = (try? await publicDB.record(for: id)) ?? CKRecord(recordType: "FriendCode", recordID: id)
         record["secret"] = nil
         record["publicKey"] = keyPair.publicKey.rawRepresentation
         record["nickname"] = nickname
+        // フレンドのフレンドに出さない（1）。出すときは空にする
+        record["hidden"] = hidesFromFriendsOfFriends ? 1 : nil
         // アイコンは版が変わったときだけ付け直す（毎回アップロードしない）
         if avatarVersion > 0, (record["avatarVersion"] as? Int) != avatarVersion,
            FileManager.default.fileExists(atPath: myAvatarFile.path) {
@@ -508,7 +324,6 @@ final class SocialStore: ObservableObject {
             return false
         }
         try? FileManager.default.removeItem(at: myAvatarFile)
-        await syncOfficial()
         return true
     }
 
@@ -523,14 +338,14 @@ final class SocialStore: ObservableObject {
     }
 
     /// 紛らわしい文字（0/O, 1/I）を除いたランダムな文字列
-    private static func random(_ length: Int) -> String {
+    static func random(_ length: Int) -> String {
         let chars = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
         return String((0..<length).map { _ in chars.randomElement()! })
     }
 
     // MARK: - 投稿
 
-    private func postID(secret: String, dayKey: String) -> CKRecord.ID {
+    func postID(secret: String, dayKey: String) -> CKRecord.ID {
         CKRecord.ID(recordName: "s-\(secret)-\(dayKey)")
     }
 
@@ -540,8 +355,7 @@ final class SocialStore: ObservableObject {
         guard entry.shareSong else {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: [id])
             uploadedStamps[entry.dayKey] = Self.stamp(entry)
-            await syncOfficial()
-            return
+                return
         }
         do {
             _ = try await save(postRecord(entry, id: id))
@@ -549,7 +363,7 @@ final class SocialStore: ObservableObject {
         } catch {
             lastError = Self.describe(error)
         }
-        await syncOfficial()
+        await pingTodayIfNeeded()
     }
 
     /// 投稿のレコードを作る（自分だけが書くので、サーバーの内容を読まずに丸ごと上書きする）
@@ -573,23 +387,19 @@ final class SocialStore: ObservableObject {
         guard state == .ready else { return }
         _ = try? await publicDB.modifyRecords(saving: [], deleting: [postID(secret: secret, dayKey: dayKey)])
         uploadedStamps[dayKey] = nil
-        if isOfficialOwner, officialStamps[dayKey] != nil {
-            _ = try? await publicDB.modifyRecords(saving: [], deleting: [Self.officialPostID(dayKey)])
-            officialStamps[dayKey] = nil
-        }
     }
 
-    private var localEntries: [SongEntry] {
+    var localEntries: [SongEntry] {
         (try? AppContainer.shared.mainContext.fetch(FetchDescriptor<SongEntry>())) ?? []
     }
 
     /// 日付 → 置いた内容の印。変わった記録だけを置き直すために使う（鍵を作り直したら空にする）
-    private var uploadedStamps: [String: String] {
+    var uploadedStamps: [String: String] {
         get { local.dictionary(forKey: "social_uploaded_\(secret)") as? [String: String] ?? [:] }
         set { local.set(newValue, forKey: "social_uploaded_\(secret)") }
     }
 
-    private static func stamp(_ entry: SongEntry) -> String {
+    static func stamp(_ entry: SongEntry) -> String {
         [entry.songID, entry.artistDisplayName, entry.memo, "\(entry.shareSong)", "\(entry.shareMemo)", "\(entry.createdAt.timeIntervalSince1970)",
          entry.clipStart.map { "\($0)" } ?? "-"].joined(separator: "|")
     }
@@ -637,7 +447,6 @@ final class SocialStore: ObservableObject {
     func uploadChanges() async {
         guard state == .ready else { return }
         await uploadAll()
-        await syncOfficial()
     }
 
     /// すべての記録を置く（月・年のプレイリストでフレンドが過去の曲も聴けるように）。
@@ -661,31 +470,17 @@ final class SocialStore: ObservableObject {
             }
         }
         uploadedStamps = stamps
+        await pingTodayIfNeeded()
     }
 
     // MARK: - フレンドの追加（申請と承認）
 
-    /// confirmOfficial：開発者とフレンドになる前に、曲が開発者にも見えることを確かめてもらう（befriendOfficial で進める）
-    enum AddResult { case requested, becameFriends, followedOfficial, confirmOfficial }
+    enum AddResult { case requested, becameFriends }
 
     /// フレンドコードで申請する。相手が承認するとフレンドになる（相手からも申請が届いていれば、すぐにフレンドになる）
     func addFriend(code raw: String) async -> AddResult? {
         let code = raw.uppercased().filter { $0.isLetter || $0.isNumber }
         guard state == .ready else { lastError = S("先にニックネームを決めてください", "Set your nickname first"); return nil }
-        if code == Self.officialCode {
-            await loadOfficial()
-            // 開発者とはもうフレンド（公式としても、ふつうのフレンドとしても）
-            guard !followsOfficial, !isOfficialOwner,
-                  !links.contains(where: { $0.creator == officialCreator }) else {
-                lastError = S("開発者とはすでにフレンドです", "You're already friends with the developer", "개발자와 이미 친구입니다")
-                return nil
-            }
-            guard official != nil else {
-                lastError = S("公式アカウントはまだ準備中です", "The official account isn't available yet", "공식 계정은 아직 준비 중입니다")
-                return nil
-            }
-            return .confirmOfficial
-        }
         guard code.count == 8 else { lastError = S("フレンドコードは8文字です", "Friend codes are 8 characters"); return nil }
         guard code != friendCode else { lastError = S("自分のコードです", "That's your own code"); return nil }
         guard !blocked.contains(code) else { lastError = S("ブロック中のユーザーです", "You've blocked this user"); return nil }
@@ -699,30 +494,11 @@ final class SocialStore: ObservableObject {
         return .requested
     }
 
-    /// 確かめてもらったあと、開発者とフレンドになる
-    func befriendOfficial() async -> AddResult {
-        await setFollowsOfficial(true)
-        return .followedOfficial
-    }
-
-    static var officialConfirmTitle: String {
-        S("開発者とフレンドになりますか？", "Be friends with the developer?", "개발자와 친구가 될까요?")
-    }
-    static var officialConfirmMessage: String {
-        S("開発者の毎日の一曲がタイムラインに流れます。あなたが共有した曲とメモも開発者に見えるようになり、いいねが付くことがあります。フレンドをやめると見えなくなります。",
-          "The developer's daily song will appear in your timeline. Your shared songs and notes will also be visible to the developer, who may like them. Remove the friend anytime to stop sharing.",
-          "개발자의 매일의 한 곡이 타임라인에 표시됩니다. 공유한 곡과 메모도 개발자에게 보이며, 좋아요를 받을 수 있습니다. 친구를 끊으면 더 이상 보이지 않습니다.")
-    }
-
     static func message(for result: AddResult) -> String {
         switch result {
         case .requested: return S("フレンド申請を送りました。相手が承認するとフレンドになります。",
                                   "Request sent. You'll become friends once they accept.")
         case .becameFriends: return S("フレンドになりました！", "You're now friends!")
-        case .confirmOfficial: return Self.officialConfirmMessage
-        case .followedOfficial: return S("開発者とフレンドになりました！開発者の毎日の一曲がタイムラインに流れ、あなたが共有した曲も開発者に届きます。",
-                                         "You're now friends with the developer! Their daily song will appear in your timeline, and your shared songs will reach them.",
-                                         "개발자와 친구가 되었습니다! 개발자의 매일의 한 곡이 타임라인에 표시되고, 공유한 곡도 개발자에게 전달됩니다.")
         }
     }
 
@@ -901,7 +677,7 @@ final class SocialStore: ObservableObject {
         let links = self.links, incoming = incomingLinks, outgoing = outgoingCodes
         let codes = Set(links.map(\.code) + incoming.map(\.code) + outgoing)
         let codeRecords = codes.isEmpty ? [:] : ((try? await publicDB.records(
-            for: codes.map { CKRecord.ID(recordName: $0) }, desiredKeys: ["nickname", "avatarVersion"])) ?? [:])
+            for: codes.map { CKRecord.ID(recordName: $0) }, desiredKeys: ["nickname", "avatarVersion", "hidden"])) ?? [:])
         func profile(_ code: String) -> (nickname: String, version: Int)? {
             guard case .success(let record)? = codeRecords[CKRecord.ID(recordName: code)] else { return nil }
             let version = record["avatarVersion"] as? Int ?? 0
@@ -920,21 +696,6 @@ final class SocialStore: ObservableObject {
 
         friends = newFriends.sorted { $0.nickname < $1.nickname }
         postCache = [:]
-        await syncOfficial()
-        await loadOfficial()
-        // 開発者とふつうのフレンドでもあれば、その人にも「開発者」の印を付ける。
-        // 持ち主の端末では、フレンドに開発者はいない（同じ Apple アカウントのテスト端末を開発者と見なさないように）
-        if let creator = officialCreator, !isOfficialOwner {
-            friends = friends.map { friend in
-                var friend = friend
-                friend.isDeveloper = links.first { $0.code == friend.code }?.creator == creator
-                return friend
-            }
-        }
-        if followsOfficial, officialFollowSlot == nil { await sendKeyToOfficial() }
-        // 前にフレンドをやめたときに消せなかった鍵やいいねが残っていれば、もう一度消す
-        if !followsOfficial, officialFollowSlot != nil || !officialLikes.isEmpty { await withdrawFromOfficial() }
-        await loadFollowers()
 
         // 各フレンドの最近の投稿を、レコード名を指定して取り出す（検索はしない）
         // 更新するたびに最初の2週間に戻す（古い投稿は必要な人が「さらに読み込む」で取る）
@@ -949,6 +710,17 @@ final class SocialStore: ObservableObject {
         }
         // いいねは、画面に出た投稿のカードがそれぞれ読み直す
         likesGeneration += 1
+
+        // タイムラインを出したあとで：自分のフレンドの一覧を置き、フレンドのフレンドを探し、通知の購読を合わせる
+        let hiddenCodes = Set(links.map(\.code).filter {
+            guard case .success(let record)? = codeRecords[CKRecord.ID(recordName: $0)] else { return true }
+            return (record["hidden"] as? Int ?? 0) != 0
+        })
+        // 3つは互いに関係しないので、同時に進める
+        async let published: Void = publishFriendList(excluding: hiddenCodes)
+        async let suggested: Void = loadSuggestions()
+        async let subscribed: Void = updateSubscriptions()
+        _ = await (published, suggested, subscribed)
     }
 
     /// もっと前の投稿を読み込めるか（Plus は1年前まで）
@@ -979,13 +751,9 @@ final class SocialStore: ObservableObject {
 
     /// いいねは "l-<投稿のレコード名>-<いいねした人のコード>" に置く。
     /// 投稿の鍵を知っているフレンドにしか場所が分からず、投稿した人は自分のフレンドのコードで探す（検索はしない）
-    /// 公式の投稿のいいねを一度に数える上限（超えたら「99+」）
-    static let officialLikeLimit = 99
 
     /// タイムラインを更新するたびに増える。カードはこれが変わったら自分のいいねを読み直す
     @Published private(set) var likesGeneration = 0
-    /// いいねが多すぎて数えきれなかった自分の投稿（日付）
-    @Published private(set) var likeOverflow: Set<String> = []
     private var pendingLikes: [FriendPost] = []
     private var likesFlush: Task<Void, Never>?
 
@@ -999,7 +767,10 @@ final class SocialStore: ObservableObject {
             let batch = pendingLikes
             pendingLikes = []
             likesFlush = nil
-            await fetchLikes(for: batch)
+            // いいねとコメントは別々のレコードなので、同時に読む
+            async let likes: Void = fetchLikes(for: batch)
+            async let comments: Void = fetchComments(for: batch)
+            _ = await (likes, comments)
         }
     }
 
@@ -1013,37 +784,18 @@ final class SocialStore: ObservableObject {
         return record
     }
 
-    /// 投稿にいいねする／取り消す。
-    /// フレンドの投稿には自分のコードで、公式の持ち主がフォロワーの投稿に付けるときは公式（OFFICIAL）として付ける。
-    /// 公式の投稿へのいいねは、日付で検索できる OfficialLike に置く
+    /// フレンドの投稿にいいねする／取り消す
     func toggleLike(_ post: FriendPost) async {
         guard state == .ready, !post.friend.isMe else { return }
         let liking = !likedByMe.contains(post.id)
         if liking { likedByMe.insert(post.id) } else { likedByMe.remove(post.id) }
         guard !isPreview else { return }
         do {
-            if post.friend.isOfficial {
-                if liking {
-                    let record = CKRecord(recordType: "OfficialLike",
-                                          recordID: CKRecord.ID(recordName: "ol-\(post.dayKey)-\(Self.random(12))"))
-                    record["dayKey"] = post.dayKey
-                    record["fromCode"] = friendCode
-                    record["likedAt"] = Date()
-                    _ = try await save(record)
-                    officialLikes[post.dayKey] = record.recordID.recordName
-                } else if let slot = officialLikes[post.dayKey] {
-                    _ = try await publicDB.modifyRecords(saving: [], deleting: [CKRecord.ID(recordName: slot)])
-                    officialLikes[post.dayKey] = nil
-                }
-            } else if post.friend.isFollower {
-                if liking {
-                    _ = try await save(likeRecord(post: post.id, code: Self.officialCode))
-                } else {
-                    _ = try await publicDB.modifyRecords(saving: [], deleting: [Self.likeID(post: post.id, code: Self.officialCode)])
-                }
-            } else if liking {
+            if liking {
                 _ = try await save(likeRecord(post: post.id))
                 likedPosts.insert(post.id)
+                // いいねした相手に通知の合図を送る
+                await sendPing(kind: "like", toSecret: post.friend.secret)
             } else {
                 _ = try await publicDB.modifyRecords(saving: [], deleting: [Self.likeID(post: post.id, code: friendCode)])
                 likedPosts.remove(post.id)
@@ -1059,51 +811,24 @@ final class SocialStore: ObservableObject {
     /// 自分の投稿へのいいねは、置いた iCloud 利用者がそのコードのフレンド本人かを確かめる（鍵を知る別のフレンドのなりすましを防ぐ）
     private func fetchLikes(for posts: [FriendPost]) async {
         guard state == .ready, !isPreview, !posts.isEmpty else { return }
-        var links = self.links
-        var friendsByCode = Dictionary(friends.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
-        // フォローしている公式からのいいねも、フレンドと同じように確かめる
-        if followsOfficial, !isOfficialOwner, let official, let creator = officialCreator {
-            links.append(FriendLink(code: Self.officialCode, secret: "", creator: creator))
-            friendsByCode[Self.officialCode] = official
-        }
+        let links = self.links
+        let friendsByCode = Dictionary(friends.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
         // いいねのレコード名 → (投稿, 自分の投稿ならいいねしたフレンド)
         var targets: [CKRecord.ID: (post: FriendPost, link: FriendLink?)] = [:]
-        for post in posts where !post.friend.isOfficial {
+        for post in posts {
             if post.friend.isMe {
                 let name = postID(secret: secret, dayKey: post.dayKey).recordName
                 for link in links { targets[Self.likeID(post: name, code: link.code)] = (post, link) }
             } else {
-                let code = post.friend.isFollower ? Self.officialCode : friendCode
-                targets[Self.likeID(post: post.id, code: code)] = (post, nil)
-            }
-        }
-        // 持ち主：自分の投稿（＝公式の投稿）へのいいねを日付で検索する（多すぎるときは上限まで）
-        var officialLikers: [String: [Friend]] = [:]
-        var overflow = likeOverflow
-        if isOfficialOwner, publishesOfficial {
-            for dayKey in posts.filter(\.friend.isMe).map(\.dayKey) {
-                let query = CKQuery(recordType: "OfficialLike", predicate: NSPredicate(format: "dayKey == %@", dayKey))
-                guard let (results, cursor) = try? await publicDB.records(matching: query, desiredKeys: ["fromCode"],
-                                                                         resultsLimit: Self.officialLikeLimit) else { continue }
-                officialLikers[dayKey] = await verifiedSenders(results.compactMap { try? $0.1.get() }).map(\.friend)
-                if cursor != nil { overflow.insert(dayKey) } else { overflow.remove(dayKey) }
+                targets[Self.likeID(post: post.id, code: friendCode)] = (post, nil)
             }
         }
         var found: [CKRecord.ID: CKRecord] = [:]
-        for chunk in Array(targets.keys).chunked(200) {
-            guard let results = try? await publicDB.records(for: chunk, desiredKeys: []) else { return }
-            for case let (id, .success(record)) in results { found[id] = record }
-        }
+        guard let results = await fetchRecords(Array(targets.keys), desiredKeys: []) else { return }
+        for case let (id, .success(record)) in results { found[id] = record }
         var liked = likedByMe, likers = self.likers
         for post in posts {
             if post.friend.isMe { likers[post.dayKey] = nil } else { liked.remove(post.id) }
-            // 公式の投稿へのいいねは、置いた枠を端末に控えてある
-            if post.friend.isOfficial, officialLikes[post.dayKey] != nil { liked.insert(post.id) }
-        }
-        for (dayKey, friends) in officialLikers {
-            for friend in friends where !(likers[dayKey] ?? []).contains(where: { $0.code == friend.code }) {
-                likers[dayKey, default: []].append(friend)
-            }
         }
         for (id, target) in targets {
             guard let record = found[id] else { continue }
@@ -1116,9 +841,8 @@ final class SocialStore: ObservableObject {
         }
         self.likedByMe = liked
         self.likers = likers.mapValues { $0.sorted { $0.nickname < $1.nickname } }
-        likeOverflow = overflow
         // 確かめた投稿は、iCloud の状態に合わせて控えを直す（別の端末で取り消したいいねを付け直さないように）
-        let checked = Set(posts.filter { !$0.friend.isMe && !$0.friend.isOfficial && !$0.friend.isFollower }.map(\.id))
+        let checked = Set(posts.filter { !$0.friend.isMe }.map(\.id))
         let saved = likedPosts.subtracting(checked).union(liked.intersection(checked))
         if saved != likedPosts { likedPosts = saved }
     }
@@ -1129,8 +853,7 @@ final class SocialStore: ObservableObject {
     private var postCache: [String: FriendPost?] = [:]
 
     private var me: Friend {
-        Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true,
-               isDeveloper: isOfficialOwner)
+        Friend(code: friendCode, nickname: nickname, secret: secret, avatarVersion: avatarVersion, isMe: true)
     }
 
     /// 期間内の、フレンドと自分の投稿。
@@ -1139,7 +862,7 @@ final class SocialStore: ObservableObject {
         let days = Self.dayKeys(from: start, to: min(end, Date()))
         var result: [FriendPost] = []
         if state == .ready {
-            for friend in friends + followers {
+            for friend in friends {
                 let ids = days.map { postID(secret: friend.secret, dayKey: $0) }
                 let missing = ids.filter { postCache[$0.recordName] == nil }
                 for chunk in missing.chunked(200) {
@@ -1150,30 +873,11 @@ final class SocialStore: ObservableObject {
                 }
                 result += ids.compactMap { postCache[$0.recordName] ?? nil }
             }
-            result += await officialPosts(days: days)
         }
         let keys = Set(days)
         let mine = localEntries.filter { keys.contains($0.dayKey) && (includeAllOfMine || $0.shareSong) }
         result += mine.map { FriendPost(entry: $0, me: me) }
         return result
-    }
-
-    /// フォローしている公式アカウントの投稿（持ち主の端末では自分の投稿として出るので取らない）
-    private func officialPosts(days: [String]) async -> [FriendPost] {
-        guard followsOfficial, !isOfficialOwner, let official, let creator = officialCreator,
-              // 公式の持ち主とフレンドなら、同じ曲がフレンドの投稿として出るので重ねて出さない
-              !links.contains(where: { $0.creator == creator }) else { return [] }
-        let ids = days.map(Self.officialPostID)
-        for chunk in ids.filter({ postCache[$0.recordName] == nil }).chunked(200) {
-            guard let found = try? await publicDB.records(for: chunk) else { continue }
-            for id in chunk {
-                let record = try? found[id]?.get()
-                postCache[id.recordName] = record.flatMap {
-                    $0.creatorUserRecordID?.recordName == creator ? FriendPost(record: $0, friend: official) : nil
-                }
-            }
-        }
-        return ids.compactMap { postCache[$0.recordName] ?? nil }
     }
 
     static func dayKeys(from start: Date, to end: Date) -> [String] {
@@ -1205,13 +909,14 @@ final class SocialStore: ObservableObject {
         timeline = entries.sorted { $0.dayKey > $1.dayKey }.prefix(12).enumerated().map { index, entry in
             FriendPost(entry: entry, me: index % 4 == 0 ? me : people[index % 3])
         }
+        loadPreviewConnections()
         state = .ready
     }
 
     // MARK: - フレンド解除・ブロック・通報
 
     /// ブロックする：この人からの申請を受け取らない。フレンドだったときは remove で鍵を作り直すので、もう投稿も見られない
-    private func block(_ code: String, nickname: String) {
+    func block(_ code: String, nickname: String) {
         blockedNames[code] = nickname
         blocked.insert(code)
     }
@@ -1230,12 +935,6 @@ final class SocialStore: ObservableObject {
     /// フレンドをやめる。自分の鍵とコードを作り直して、相手が読めないようにする
     func remove(_ friend: Friend, block: Bool) async {
         if block { self.block(friend.code, nickname: friend.nickname) }
-        // 開発者のフレンド（持ち主の端末）は鍵を交わしていないので、ブロックして出さないだけにする
-        if friend.isFollower {
-            followers.removeAll { $0.code == friend.code }
-            timeline.removeAll { $0.friend.code == friend.code }
-            return
-        }
         links.removeAll { $0.code == friend.code }
         friends.removeAll { $0.code == friend.code }
         timeline.removeAll { $0.friend.code == friend.code }
@@ -1257,6 +956,8 @@ final class SocialStore: ObservableObject {
         await uploadAll()
         // 古い投稿と古いコードを消す
         let oldIDs = localEntries.map { postID(secret: oldSecret, dayKey: $0.dayKey) } + [CKRecord.ID(recordName: oldCode)]
+            + [Self.friendListID(secret: oldSecret), Self.postPingID(secret: oldSecret)]
+        local.removeObject(forKey: "social_friendList_\(oldSecret)")
         for chunk in oldIDs.chunked(200) {
             _ = try? await publicDB.modifyRecords(saving: [], deleting: chunk)
         }
@@ -1267,16 +968,11 @@ final class SocialStore: ObservableObject {
             _ = try? await publicDB.modifyRecords(saving: chunk.map { likeRecord(post: $0) },
                                                   deleting: chunk.map { Self.likeID(post: $0, code: oldCode) })
         }
+        // 自分のコメントを新しいコードに書き換える
+        await moveCommentsToNewCode()
         // 残っているフレンドに新しいコードと鍵を届ける
         for link in links { await sendKey(to: link.code, previousCode: oldCode) }
         for code in outgoingCodes { await sendKey(to: code) }
-        // 公式に届けた鍵と、公式の投稿へのいいねも新しいコードに書き換える
-        await sendKeyToOfficial()
-        for name in officialLikes.values {
-            let record = CKRecord(recordType: "OfficialLike", recordID: CKRecord.ID(recordName: name))
-            record["fromCode"] = friendCode
-            _ = try? await save(record)
-        }
         await refresh()
     }
 
@@ -1311,16 +1007,16 @@ final class SocialStore: ObservableObject {
             lastError = Self.describe(error)
             return false
         }
-        if isOfficialOwner { await setPublishesOfficial(false) }
-        await withdrawFromOfficial()
+        await removeOfficialLeftovers()
+        await deleteSocialExtras()
         local.removeObject(forKey: "social_uploaded_\(secret)")
         for key in ["social_nickname", "social_secret", "social_code", "social_avatarVersion", "social_privateKey",
-                    "social_links", "social_outgoing", "social_liked"] {
+                    "social_links", "social_outgoing", "social_liked", "social_comments", "social_commentPings", "social_reactions"] {
             local.removeObject(forKey: key)
             if usesCloud { cloud.removeObject(forKey: key) }
         }
         if usesCloud { cloud.synchronize() }
-        for key in ["social_incoming", "social_handledRequests", "social_restoredOnce"] {
+        for key in ["social_incoming", "social_handledRequests", "social_restoredOnce", "social_pingedDay", "social_subscriptionSignature"] {
             local.removeObject(forKey: key)
         }
         try? FileManager.default.removeItem(at: myAvatarFile)
@@ -1333,6 +1029,10 @@ final class SocialStore: ObservableObject {
         timeline = []
         likedByMe = []
         likers = [:]
+        comments = [:]
+        commentReactions = [:]
+        suggestions = []
+        mutualFriends = [:]
         timelineDays = Self.freeTimelineDays
         state = .notSetUp
         return true
@@ -1340,7 +1040,7 @@ final class SocialStore: ObservableObject {
 
     // MARK: - CloudKit の小さな手助け
 
-    private func save(_ record: CKRecord) async throws -> CKRecord {
+    func save(_ record: CKRecord) async throws -> CKRecord {
         let (results, _) = try await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .changedKeys)
         guard let result = results[record.recordID] else { return record }
         return try result.get()
@@ -1379,11 +1079,6 @@ struct Friend: Identifiable, Hashable {
     let secret: String
     var avatarVersion = 0
     var isMe = false
-    var isOfficial = false
-    /// 開発者本人（公式アカウントの持ち主）。公式アカウントと同じく「開発者」の印を付ける
-    var isDeveloper = false
-    /// 公式アカウントのフォロワー（持ち主の端末にだけ出る）
-    var isFollower = false
     var id: String { code }
 }
 
