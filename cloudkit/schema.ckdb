@@ -144,7 +144,8 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
-    // 通知の合図（"p-<目印>" = 投稿、"q-<コード>-<目印の頭>" = コメント）。曲やメモは置かない。
+    // 通知の合図（"p-<目印>" = 投稿、"k|q|y-<送り主の鍵から作った目印>" = いいね・コメント・返信）。曲やメモは置かない。
+    // tag は検索できるので全件を一覧できてしまう。ニックネームやフレンドコードは置かない（nickname は 1.0.5 (15) までの名残で、常に空）
     // 購読（CKQuerySubscription）に使うので、tag にだけ QUERYABLE の索引を付ける（例外）
     RECORD TYPE Ping (
         "___createTime" TIMESTAMP,

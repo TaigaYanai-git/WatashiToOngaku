@@ -534,7 +534,8 @@ extension SocialStore {
         let id = Self.postPingID(secret: secret)
         let record = CKRecord(recordType: "Ping", recordID: id)
         record["tag"] = String(id.recordName.dropFirst(2))
-        record["nickname"] = nickname
+        // 合図は誰でも tag で検索できるので、ニックネームやフレンドコードは置かない（古い版が置いた nickname も消す）
+        record["nickname"] = nil
         record["dayKey"] = today
         if (try? await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)) != nil {
             local.set(today, forKey: "social_pingedDay")
@@ -546,10 +547,10 @@ extension SocialStore {
         guard !isPreview else { return }
         let tag = Self.pingTag(secret: ownerSecret, kind: kind)
         let prefix = ["like": "k", "reply": "y"][kind] ?? "q"
-        let id = CKRecord.ID(recordName: "\(prefix)-\(friendCode)-\(tag.prefix(16))")
+        // レコード名は自分の鍵から作る推測できない目印（フレンドコードを入れると、Ping の一覧から誰が反応したかが分かってしまう）
+        let id = CKRecord.ID(recordName: "\(prefix)-\(Self.pingTag(secret: secret, kind: "from-\(kind)-\(tag)"))")
         let record = CKRecord(recordType: "Ping", recordID: id)
         record["tag"] = tag
-        record["nickname"] = nickname
         record["dayKey"] = DayKey.string(from: Date())
         if (try? await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)) != nil {
             commentPings.insert(id.recordName)
@@ -567,7 +568,7 @@ extension SocialStore {
         let commentTag = notifiesComments ? Self.pingTag(secret: secret, kind: "comment") : nil
         let likeTag = notifiesLikes ? Self.pingTag(secret: secret, kind: "like") : nil
         let language = ThemeStore.shared.language
-        let signature = (postTags + [commentTag ?? "-", likeTag ?? "-", language, "v2"]).joined(separator: ",")
+        let signature = (postTags + [commentTag ?? "-", likeTag ?? "-", language, "v3"]).joined(separator: ",")
         guard local.string(forKey: "social_subscriptionSignature") != signature else { return }
 
         var saving: [CKSubscription] = []
@@ -577,7 +578,7 @@ extension SocialStore {
                                                    subscriptionID: "\(Self.subscriptionPrefix)posts-\(index)",
                                                    options: [.firesOnRecordCreation, .firesOnRecordUpdate])
             subscription.notificationInfo = Self.notificationInfo(
-                S("%1$@さんが今日の一曲を選びました", "%1$@ picked today's song", "%1$@님이 오늘의 한 곡을 골랐습니다"))
+                S("フレンドが今日の一曲を選びました", "A friend picked today's song", "친구가 오늘의 한 곡을 골랐습니다"))
             saving.append(subscription)
         }
         if let commentTag {
@@ -585,7 +586,7 @@ extension SocialStore {
                                                    subscriptionID: "\(Self.subscriptionPrefix)comments",
                                                    options: [.firesOnRecordCreation, .firesOnRecordUpdate])
             subscription.notificationInfo = Self.notificationInfo(
-                S("%1$@さんがあなたの曲にコメントしました", "%1$@ commented on your song", "%1$@님이 내 곡에 댓글을 남겼습니다"))
+                S("フレンドがあなたの曲にコメントしました", "A friend commented on your song", "친구가 내 곡에 댓글을 남겼습니다"))
             saving.append(subscription)
             // 自分のコメントへの返信も、コメントの通知に含める
             let replies = CKQuerySubscription(recordType: "Ping",
@@ -593,7 +594,7 @@ extension SocialStore {
                                               subscriptionID: "\(Self.subscriptionPrefix)replies",
                                               options: [.firesOnRecordCreation, .firesOnRecordUpdate])
             replies.notificationInfo = Self.notificationInfo(
-                S("%1$@さんがあなたのコメントに返信しました", "%1$@ replied to your comment", "%1$@님이 내 댓글에 답글을 남겼습니다"))
+                S("フレンドがあなたのコメントに返信しました", "A friend replied to your comment", "친구가 내 댓글에 답글을 남겼습니다"))
             saving.append(replies)
         }
         if let likeTag {
@@ -601,7 +602,7 @@ extension SocialStore {
                                                    subscriptionID: "\(Self.subscriptionPrefix)likes",
                                                    options: [.firesOnRecordCreation, .firesOnRecordUpdate])
             subscription.notificationInfo = Self.notificationInfo(
-                S("%1$@さんがあなたの曲にいいねしました", "%1$@ liked your song", "%1$@님이 내 곡에 좋아요를 눌렀습니다"))
+                S("フレンドがあなたの曲にいいねしました", "A friend liked your song", "친구가 내 곡에 좋아요를 눌렀습니다"))
             saving.append(subscription)
         }
         do {
@@ -620,11 +621,10 @@ extension SocialStore {
         }
     }
 
-    /// 通知の文。文言の鍵に、アプリで選んでいる言語の文をそのまま使う（アプリに翻訳ファイルがないので、鍵がそのまま出る）
-    private static func notificationInfo(_ format: String) -> CKSubscription.NotificationInfo {
+    /// 通知の文。合図にはニックネームを置かないので、誰からかは書かない汎用の文にする
+    private static func notificationInfo(_ text: String) -> CKSubscription.NotificationInfo {
         let info = CKSubscription.NotificationInfo()
-        info.alertLocalizationKey = format
-        info.alertLocalizationArgs = ["nickname"]
+        info.alertBody = text
         info.soundName = "default"
         return info
     }
