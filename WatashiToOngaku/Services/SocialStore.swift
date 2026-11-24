@@ -1019,6 +1019,7 @@ final class SocialStore: ObservableObject {
         for key in ["social_incoming", "social_handledRequests", "social_restoredOnce", "social_pingedDay", "social_subscriptionSignature"] {
             local.removeObject(forKey: key)
         }
+        PingCrypto.saveRoutes([:])
         try? FileManager.default.removeItem(at: myAvatarFile)
         nickname = ""
         friendCode = ""

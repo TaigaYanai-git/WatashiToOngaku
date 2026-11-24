@@ -534,8 +534,8 @@ extension SocialStore {
         let id = Self.postPingID(secret: secret)
         let record = CKRecord(recordType: "Ping", recordID: id)
         record["tag"] = String(id.recordName.dropFirst(2))
-        // 合図は誰でも tag で検索できるので、ニックネームやフレンドコードは置かない（古い版が置いた nickname も消す）
-        record["nickname"] = nil
+        // 合図は誰でも tag で検索できるので、名前は自分の鍵で閉じた暗号文だけを置く（フレンドの端末の通知拡張が開く）
+        record["nickname"] = PingCrypto.seal(nickname, secret: secret)
         record["dayKey"] = today
         if (try? await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)) != nil {
             local.set(today, forKey: "social_pingedDay")
@@ -551,6 +551,8 @@ extension SocialStore {
         let id = CKRecord.ID(recordName: "\(prefix)-\(Self.pingTag(secret: secret, kind: "from-\(kind)-\(tag)"))")
         let record = CKRecord(recordType: "Ping", recordID: id)
         record["tag"] = tag
+        // 名前は相手の鍵で閉じる（相手の端末の通知拡張だけが開ける）
+        record["nickname"] = PingCrypto.seal(nickname, secret: ownerSecret)
         record["dayKey"] = DayKey.string(from: Date())
         if (try? await publicDB.modifyRecords(saving: [record], deleting: [], savePolicy: .allKeys)) != nil {
             commentPings.insert(id.recordName)
@@ -568,11 +570,17 @@ extension SocialStore {
         let commentTag = notifiesComments ? Self.pingTag(secret: secret, kind: "comment") : nil
         let likeTag = notifiesLikes ? Self.pingTag(secret: secret, kind: "like") : nil
         let language = ThemeStore.shared.language
-        let signature = (postTags + [commentTag ?? "-", likeTag ?? "-", language, "v3"]).joined(separator: ",")
+        let signature = (postTags + [commentTag ?? "-", likeTag ?? "-", language, "v4"]).joined(separator: ",")
         guard local.string(forKey: "social_subscriptionSignature") != signature else { return }
 
         var saving: [CKSubscription] = []
         // IN に並べる数を抑えるため、50人ずつに分ける
+        // 通知拡張に渡す「tag → 名前を開く鍵と文の型」
+        var routes: [String: PingCrypto.Route] = [:]
+        let postFormat = S("%@さんが今日の一曲を選びました", "%@ picked today's song", "%@님이 오늘의 한 곡을 골랐습니다")
+        for link in links where !blocked.contains(link.code) && notifiesFriendPosts {
+            routes[Self.pingTag(secret: link.secret, kind: "post")] = PingCrypto.makeRoute(secret: link.secret, format: postFormat)
+        }
         for (index, tags) in postTags.chunked(50).enumerated() {
             let subscription = CKQuerySubscription(recordType: "Ping", predicate: NSPredicate(format: "tag IN %@", tags),
                                                    subscriptionID: "\(Self.subscriptionPrefix)posts-\(index)",
@@ -605,6 +613,15 @@ extension SocialStore {
                 S("フレンドがあなたの曲にいいねしました", "A friend liked your song", "친구가 내 곡에 좋아요를 눌렀습니다"))
             saving.append(subscription)
         }
+        if let commentTag {
+            routes[commentTag] = PingCrypto.makeRoute(secret: secret, format: S("%@さんがあなたの曲にコメントしました", "%@ commented on your song", "%@님이 내 곡에 댓글을 남겼습니다"))
+            routes[Self.pingTag(secret: secret, kind: "reply")] = PingCrypto.makeRoute(
+                secret: secret, format: S("%@さんがあなたのコメントに返信しました", "%@ replied to your comment", "%@님이 내 댓글에 답글을 남겼습니다"))
+        }
+        if let likeTag {
+            routes[likeTag] = PingCrypto.makeRoute(secret: secret, format: S("%@さんがあなたの曲にいいねしました", "%@ liked your song", "%@님이 내 곡에 좋아요를 눌렀습니다"))
+        }
+        PingCrypto.saveRoutes(routes)
         do {
             let existing = try await publicDB.allSubscriptions().map(\.subscriptionID)
                 .filter { $0.hasPrefix(Self.subscriptionPrefix) }
@@ -621,10 +638,13 @@ extension SocialStore {
         }
     }
 
-    /// 通知の文。合図にはニックネームを置かないので、誰からかは書かない汎用の文にする
+    /// 通知の文。サーバーが作るのは誰からかを書かない汎用の文で、端末の通知拡張（NotificationService）が
+    /// 合図の暗号化された名前を開けたら「〇〇さんが…」に書き換える。そのため tag と nickname を通知に載せる
     private static func notificationInfo(_ text: String) -> CKSubscription.NotificationInfo {
         let info = CKSubscription.NotificationInfo()
         info.alertBody = text
+        info.desiredKeys = ["tag", "nickname"]
+        info.shouldSendMutableContent = true
         info.soundName = "default"
         return info
     }
