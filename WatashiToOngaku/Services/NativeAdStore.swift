@@ -34,6 +34,7 @@ enum TrackingConsent {
 }
 
 /// タイムラインに挟む広告（AdMob のネイティブ広告）を読み込んでおく。Plus の人には出さない。
+/// 広告はフレンドの投稿の間にだけ出す（中身のない画面やボタンのすぐ近くには出さない：AdMob のポリシー）。
 /// 1つの広告は1つの画面にしか出せないので、表示する枠の数だけ読み込む
 @MainActor
 final class NativeAdStore: NSObject, ObservableObject {
@@ -45,11 +46,8 @@ final class NativeAdStore: NSObject, ObservableObject {
     private static let maxAds = 5
 
     @Published private(set) var ads: [NativeAd] = []
-    /// 「今日の一曲」で曲を選ぶ前の画面の下に出す広告（タイムラインとは別に1つ持つ）
-    @Published private(set) var todayAd: NativeAd?
 
     private var loader: AdLoader?
-    private var todayLoader: AdLoader?
     /// 広告 SDK の初期化（同時に呼ばれても1回だけ行い、全員がその完了を待つ）
     private var startTask: Task<Void, Never>?
 
@@ -67,18 +65,6 @@ final class NativeAdStore: NSObject, ObservableObject {
         let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: [options])
         loader.delegate = self
         self.loader = loader
-        loader.load(Request())
-    }
-
-    /// 「今日の一曲」の広告を読み込む
-    func loadToday() async {
-        guard !PlusStore.shared.isPlus, todayAd == nil, todayLoader?.isLoading != true, !Self.unitID.isEmpty,
-              !SocialStore.shared.isPreview else { return }
-        await startIfNeeded()
-        guard !PlusStore.shared.isPlus, todayAd == nil, todayLoader?.isLoading != true else { return }
-        let loader = AdLoader(adUnitID: Self.unitID, rootViewController: nil, adTypes: [.native], options: nil)
-        loader.delegate = self
-        todayLoader = loader
         loader.load(Request())
     }
 
@@ -103,14 +89,7 @@ final class NativeAdStore: NSObject, ObservableObject {
 
 extension NativeAdStore: NativeAdLoaderDelegate {
     nonisolated func adLoader(_ adLoader: AdLoader, didReceive nativeAd: NativeAd) {
-        let source = ObjectIdentifier(adLoader)
-        Task { @MainActor in
-            if let todayLoader = self.todayLoader, ObjectIdentifier(todayLoader) == source {
-                self.todayAd = nativeAd
-            } else {
-                self.ads.append(nativeAd)
-            }
-        }
+        Task { @MainActor in self.ads.append(nativeAd) }
     }
 
     nonisolated func adLoader(_ adLoader: AdLoader, didFailToReceiveAdWithError error: Error) {

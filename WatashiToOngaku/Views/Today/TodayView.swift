@@ -10,7 +10,6 @@ struct TodayView: View {
     @Query private var entries: [SongEntry]
     @ObservedObject private var social = SocialStore.shared
     @ObservedObject private var plus = PlusStore.shared
-    @ObservedObject private var adStore = NativeAdStore.shared
 
     @State private var showPicker = false
     @State private var memoDraft = ""
@@ -36,10 +35,6 @@ struct TodayView: View {
                         emptyCard
                     }
                     streakRow
-                    // 曲を選ぶ前の画面の下に広告を出す（Plus の人には出さない）
-                    if entry == nil, !plus.isPlus, let ad = adStore.todayAd {
-                        NativeAdCard(ad: ad)
-                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -62,7 +57,6 @@ struct TodayView: View {
                 MusicPickerSheet(hasSelection: entry != nil, onSelect: select, onClear: clear)
             }
             .onAppear { memoDraft = entry?.memo ?? "" }
-            .task(id: entry == nil) { if entry == nil { await adStore.loadToday() } }
             .onChange(of: dayKey) { oldKey, _ in
                 saveMemo(forKey: oldKey)
                 PreviewPlayer.shared.stop()
