@@ -32,6 +32,31 @@ extension Color {
     static var dlPrimaryEnd: Color { ThemeStore.shared.primaryEnd }
     static var dlPrimaryBg:  Color { ThemeStore.shared.primaryBg }
 
+    /// 文字を載せる吹き出し用の薄いテーマ色。dlPrimaryBg はダークでも明るいままなので、
+    /// ダークではカード色にテーマ色を少し混ぜた暗い色にして dlText（白系）が読めるようにする
+    static var dlPrimarySoft: Color {
+        let p = UIColor(ThemeStore.shared.primary).rgba
+        let light = UIColor(ThemeStore.shared.primaryBg)
+        return Color(UIColor { t in
+            guard t.userInterfaceStyle == .dark else { return light }
+            let k = 0.35 // カード #26213A に対するテーマ色の割合
+            return UIColor(red: 0.15 + (p.r - 0.15) * k, green: 0.13 + (p.g - 0.13) * k,
+                           blue: 0.22 + (p.b - 0.22) * k, alpha: 1)
+        })
+    }
+
+    /// テーマ色の文字。ブラックなど暗いテーマ色はダークで背景に沈むので、白に寄せて明るくする
+    static var dlPrimaryText: Color {
+        let p = UIColor(ThemeStore.shared.primary).rgba
+        let base = UIColor(ThemeStore.shared.primary)
+        return Color(UIColor { t in
+            guard t.userInterfaceStyle == .dark else { return base }
+            let k = 0.45
+            return UIColor(red: p.r + (1 - p.r) * k, green: p.g + (1 - p.g) * k,
+                           blue: p.b + (1 - p.b) * k, alpha: 1)
+        })
+    }
+
     // Secondary accents (fixed)
     static let dlPink = Color(red: 0.976, green: 0.773, blue: 0.816)  // #F9C5D0
     static let dlMint = Color(red: 0.722, green: 0.929, blue: 0.847)  // #B8EDD8

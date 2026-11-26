@@ -203,7 +203,7 @@ struct CommentsSheet: View {
                     }
                     .accessibilityLabel(S("返信をやめる", "Cancel reply", "답글 취소"))
                 }
-                .foregroundColor(.dlPrimary)
+                .foregroundColor(.dlPrimaryText)
                 .padding(.horizontal, 20)
             }
             HStack(alignment: .bottom, spacing: 10) {
@@ -329,7 +329,7 @@ private struct CommentRow: View {
                             Image(systemName: "arrowtriangle.right.fill").font(.system(size: 6)).foregroundColor(.dlTextLight)
                             Text(verbatim: name)
                                 .font(.caption.weight(.semibold))
-                                .foregroundColor(.dlPrimary)
+                                .foregroundColor(.dlPrimaryText)
                                 .lineLimit(1)
                         }
                     }
@@ -341,7 +341,7 @@ private struct CommentRow: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(comment.isMine ? Color.dlPrimaryBg : Color.dlCard))
+                    .fill(comment.isMine ? Color.dlPrimarySoft : Color.dlCard))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.dlPrimary, lineWidth: isReplyTarget ? 1.5 : 0))
                 .contextMenu { menu }
@@ -390,11 +390,11 @@ private struct CommentRow: View {
                     HStack(spacing: 3) {
                         Text(verbatim: emoji).font(.caption)
                         Text(verbatim: "\(people.count)").font(.caption2.weight(.semibold).monospacedDigit())
-                            .foregroundColor(mine ? .dlPrimary : .dlTextSub)
+                            .foregroundColor(mine ? .dlPrimaryText : .dlTextSub)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(mine ? Color.dlPrimaryBg : Color.dlCard))
+                    .background(Capsule().fill(mine ? Color.dlPrimarySoft : Color.dlCard))
                     .overlay(Capsule().stroke(mine ? Color.dlPrimary.opacity(0.6) : Color.dlTextLight.opacity(0.3), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -422,7 +422,7 @@ private struct CommentRow: View {
                     Text(verbatim: emoji)
                         .font(.title2)
                         .frame(width: 40, height: 40)
-                        .background(Circle().fill(mine == emoji ? Color.dlPrimaryBg : Color.clear))
+                        .background(Circle().fill(mine == emoji ? Color.dlPrimarySoft : Color.clear))
                 }
                 .buttonStyle(.plain)
             }
