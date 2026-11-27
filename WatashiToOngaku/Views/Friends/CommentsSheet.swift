@@ -15,6 +15,8 @@ struct CommentsSheet: View {
     @State private var message: String?
     /// 返信しようとしているコメント
     @State private var replyingTo: PostComment?
+    /// アイコンを押して開くプロフィール
+    @State private var profileTarget: CommentProfileTarget?
     @FocusState private var focused: Bool
 
     private var comments: [PostComment] { social.comments[post.id] ?? [] }
@@ -107,6 +109,26 @@ struct CommentsSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .sheet(item: $profileTarget) { target in
+            switch target {
+            case .friend(let friend): FriendProfileSheet(friend: friend)
+            case .other(let person): CommenterProfileSheet(person: person)
+            }
+        }
+    }
+
+    /// アイコンを押した人のプロフィールを開く。フレンドならフレンドの一覧つき、
+    /// フレンドでなければ（投稿した人のフレンド）名前と申請ボタンだけ。自分は開かない
+    private func openProfile(code: String, nickname: String, avatarVersion: Int) {
+        guard code != social.friendCode else { return }
+        if let friend = social.friends.first(where: { $0.code == code }) {
+            profileTarget = .friend(friend)
+        } else if let known = social.fofProfiles[code] {
+            profileTarget = .other(known)
+        } else {
+            profileTarget = .other(FriendSuggestion(code: code, nickname: nickname, avatarVersion: avatarVersion,
+                                                    via: post.friend.isMe ? [] : [post.friend.nickname]))
+        }
     }
 
     private func row(_ comment: PostComment, replyingToName: String?) -> some View {
@@ -118,7 +140,8 @@ struct CommentsSheet: View {
                    isReplyTarget: replyingTo?.id == comment.id,
                    onReply: { reply(to: comment) },
                    onDelete: { deleting = comment },
-                   onReport: { reporting = comment })
+                   onReport: { reporting = comment },
+                   onTapAvatar: { openProfile(code: comment.code, nickname: comment.nickname, avatarVersion: comment.avatarVersion) })
             .id(comment.id)
     }
 
@@ -128,7 +151,13 @@ struct CommentsSheet: View {
     private var postHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                AvatarView(friend: post.friend, size: 26)
+                if post.friend.isMe {
+                    AvatarView(friend: post.friend, size: 26)
+                } else {
+                    Button { profileTarget = .friend(post.friend) } label: { AvatarView(friend: post.friend, size: 26) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(S("\(post.friend.nickname)さんのプロフィール", "\(post.friend.nickname)'s profile", "\(post.friend.nickname)님의 프로필"))
+                }
                 Text(verbatim: post.friend.isMe ? S("あなたの一曲", "Your song", "나의 한 곡") : S("\(post.friend.nickname)さんの一曲", "\(post.friend.nickname)'s song", "\(post.friend.nickname)님의 한 곡"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.dlText)
@@ -308,15 +337,27 @@ private struct CommentRow: View {
     let onReply: () -> Void
     let onDelete: () -> Void
     let onReport: () -> Void
+    let onTapAvatar: () -> Void
     @State private var showsPicker = false
+
+    private var avatar: some View {
+        AvatarView(code: comment.code, version: comment.avatarVersion, nickname: comment.nickname,
+                   size: replyingToName == nil ? 36 : 28)
+    }
 
     /// 自分のコメントにはリアクションしない
     private var canReact: Bool { !comment.isMine }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            AvatarView(code: comment.code, version: comment.avatarVersion, nickname: comment.nickname,
-                       size: replyingToName == nil ? 36 : 28)
+            // 押すとその人のプロフィール（自分のアイコンはボタンにしない。disabled だと薄くなるため）
+            if comment.isMine {
+                avatar
+            } else {
+                Button(action: onTapAvatar) { avatar }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(S("\(comment.nickname)さんのプロフィール", "\(comment.nickname)'s profile", "\(comment.nickname)님의 프로필"))
+            }
             VStack(alignment: .leading, spacing: 4) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
@@ -511,5 +552,18 @@ struct CommentThread: Identifiable {
             if root == comment.id { roots.append(comment) } else { replies[root, default: []].append(comment) }
         }
         return roots.map { CommentThread(root: $0, replies: replies[$0.id] ?? [], names: names) }
+    }
+}
+
+
+/// コメント欄で開くプロフィールの相手
+enum CommentProfileTarget: Identifiable {
+    case friend(Friend)
+    case other(FriendSuggestion)
+    var id: String {
+        switch self {
+        case .friend(let f): "f-\(f.code)"
+        case .other(let p): "o-\(p.code)"
+        }
     }
 }

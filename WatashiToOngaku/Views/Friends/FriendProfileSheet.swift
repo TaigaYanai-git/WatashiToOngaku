@@ -153,3 +153,77 @@ struct FriendProfileSheet: View {
         }
     }
 }
+
+/// コメント欄でフレンドでない人（投稿した人のフレンド）のアイコンを押したときのプロフィール。
+/// その人のフレンドの一覧は読めない（フレンドの鍵がない）ので、名前と申請ボタンだけ
+struct CommenterProfileSheet: View {
+    let person: FriendSuggestion
+    @ObservedObject private var social = SocialStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var working = false
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 10) {
+                AvatarView(code: person.code, version: person.avatarVersion, nickname: person.nickname, size: 84)
+                Text(verbatim: person.nickname).font(.title3.weight(.bold)).foregroundColor(.dlText).lineLimit(1)
+                if !person.via.isEmpty {
+                    Text(verbatim: S("\(person.via.joined(separator: "、"))さんのフレンド", "Friends with \(person.via.joined(separator: ", "))",
+                                     "\(person.via.joined(separator: ", "))님의 친구"))
+                        .font(.subheadline).foregroundColor(.dlTextSub).lineLimit(2)
+                }
+                requestButton.padding(.top, 8)
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(DlBackground().ignoresSafeArea())
+            .navigationTitle(Text(verbatim: person.nickname))
+            .navigationBarTitleDisplayMode(.inline)
+            .appNavBarBackground()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(S("閉じる", "Close")) { dismiss() }.foregroundColor(.dlPrimary)
+                }
+            }
+            .alert(Text(verbatim: message ?? ""), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+                Button("OK") {}
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var requestButton: some View {
+        if social.blocked.contains(person.code) {
+            EmptyView()
+        } else if social.status(of: person) == .requested {
+            Text(verbatim: S("申請済み", "Requested", "신청함"))
+                .font(.subheadline.weight(.semibold)).foregroundColor(.dlTextSub)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(Capsule().fill(Color.dlCardTint))
+        } else {
+            let incoming = social.status(of: person) == .incoming
+            Button {
+                working = true
+                Task {
+                    let result = await social.addFriend(code: person.code)
+                    working = false
+                    message = result.map(SocialStore.message(for:)) ?? (social.lastError ?? S("申請できませんでした", "Couldn't send the request"))
+                }
+            } label: {
+                Group {
+                    if working { ProgressView().tint(.white) }
+                    else { Text(verbatim: incoming ? S("フレンド申請を承認", "Accept request", "친구 신청 수락") : S("フレンド申請", "Send friend request", "친구 신청")) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20).padding(.vertical, 10)
+                .background(Capsule().fill(LinearGradient.dlPrimary))
+            }
+            .disabled(working)
+        }
+    }
+}

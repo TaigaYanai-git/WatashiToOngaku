@@ -10,6 +10,7 @@ struct TimelineGroupTabs: View {
     @State private var editing: TimelineList?
     @State private var deleting: TimelineList?
     @State private var showPlus = false
+    @State private var showBulkDelete = false
     @State private var frames: [String: CGRect] = [:]
 
     /// タブの文字の左右の余白。下線は文字の幅に合わせる
@@ -47,6 +48,7 @@ struct TimelineGroupTabs: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dlDivider).frame(height: 1) }
         .sheet(item: $editing) { TimelineListEditor(list: $0) }
         .sheet(isPresented: $showPlus) { PlusView() }
+        .sheet(isPresented: $showBulkDelete) { TimelineBulkDeleteSheet() }
         .confirmationDialog(Text(verbatim: S("「\(deleting?.name ?? "")」を削除しますか？", "Delete \"\(deleting?.name ?? "")\"?", "「\(deleting?.name ?? "")」을(를) 삭제할까요?")),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                             titleVisibility: .visible, presenting: deleting) { list in
@@ -114,6 +116,9 @@ struct TimelineGroupTabs: View {
                     Button(S("メンバーと名前を編集", "Edit Name & Members", "이름과 멤버 편집"), systemImage: "pencil") { editing = current }
                     Button(S("削除", "Delete", "삭제"), systemImage: "trash", role: .destructive) { deleting = current }
                 }
+            }
+            if store.lists.count >= 2 {
+                Button(S("まとめて削除", "Delete Multiple", "여러 개 삭제"), systemImage: "checklist") { showBulkDelete = true }
             }
         } label: {
             Image(systemName: "slider.horizontal.3")
@@ -242,6 +247,90 @@ struct TimelineListEditor: View {
                     .foregroundColor(.dlPrimary)
                     .disabled(trimmedName.isEmpty)
                 }
+            }
+        }
+    }
+}
+
+
+/// タイムラインを選んでまとめて削除する。Plus が切れて隠れているタイムラインも並べる
+struct TimelineBulkDeleteSheet: View {
+    @ObservedObject private var store = TimelineListStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: Set<String> = []
+    @State private var confirming = false
+
+    private var allSelected: Bool { !store.lists.isEmpty && selected.count == store.lists.count }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(store.lists) { list in
+                        Button {
+                            if selected.contains(list.id) { selected.remove(list.id) } else { selected.insert(list.id) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: selected.contains(list.id) ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundColor(selected.contains(list.id) ? .dlPrimaryText : .dlTextLight)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(verbatim: list.name).foregroundColor(.dlText).lineLimit(1)
+                                    Text(verbatim: S("\(list.members.count)人", "\(list.members.count) friends", "\(list.members.count)명"))
+                                        .font(.caption).foregroundColor(.dlTextSub)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Color.dlCard)
+                        .accessibilityAddTraits(selected.contains(list.id) ? .isSelected : [])
+                    }
+                } footer: {
+                    Text(verbatim: S("フレンドや投稿は消えません", "Your friends and posts stay.", "친구와 게시물은 사라지지 않습니다"))
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(DlBackground().ignoresSafeArea())
+            .navigationTitle(Text(verbatim: S("まとめて削除", "Delete Multiple", "여러 개 삭제")))
+            .navigationBarTitleDisplayMode(.inline)
+            .appNavBarBackground()
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(S("キャンセル", "Cancel", "취소")) { dismiss() }.foregroundColor(.dlPrimary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(allSelected ? S("選択を解除", "Deselect All", "선택 해제") : S("すべて選択", "Select All", "모두 선택")) {
+                        selected = allSelected ? [] : Set(store.lists.map(\.id))
+                    }
+                    .foregroundColor(.dlPrimary)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button(role: .destructive) { confirming = true } label: {
+                    Text(verbatim: selected.isEmpty ? S("削除するタイムラインを選んでください", "Select timelines to delete", "삭제할 타임라인을 선택하세요")
+                                                    : S("\(selected.count)個を削除", "Delete \(selected.count)", "\(selected.count)개 삭제"))
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(selected.isEmpty ? Color.dlTextLight.opacity(0.5) : Color.red))
+                }
+                .disabled(selected.isEmpty)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+            }
+            .confirmationDialog(Text(verbatim: S("\(selected.count)個のタイムラインを削除しますか？", "Delete \(selected.count) timelines?", "타임라인 \(selected.count)개를 삭제할까요?")),
+                                isPresented: $confirming, titleVisibility: .visible) {
+                Button(S("削除", "Delete", "삭제"), role: .destructive) {
+                    store.delete(ids: selected)
+                    dismiss()
+                }
+            } message: {
+                Text(verbatim: S("フレンドや投稿は消えません", "Your friends and posts stay.", "친구와 게시물은 사라지지 않습니다"))
             }
         }
     }

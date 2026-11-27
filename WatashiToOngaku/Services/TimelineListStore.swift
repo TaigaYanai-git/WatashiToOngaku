@@ -72,6 +72,14 @@ final class TimelineListStore: ObservableObject {
         persist()
     }
 
+    /// 選んだタイムラインをまとめて削除する
+    func delete(ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        lists.removeAll { ids.contains($0.id) }
+        if ids.contains(selectedID) { selectedID = Self.allID }
+        persist()
+    }
+
     private func persist() {
         if let data = try? JSONEncoder().encode(lists) {
             UserDefaults.standard.set(data, forKey: Self.listsKey)
